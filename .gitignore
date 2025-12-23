@@ -52,3 +52,14 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# Test results / coverage
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
