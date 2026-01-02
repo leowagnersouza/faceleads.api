@@ -4,6 +4,7 @@ using Faceleads.Leads.Application.GetConsultorById;
 using Faceleads.Leads.Domain;
 using Faceleads.Leads.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,6 +49,65 @@ app.MapPost("/consultores", async (
             result.ErrorCode,
             result.ErrorMessage
         });
+
+// Endpoint para listar consultores (exclui soft-deleted automaticamente)
+app.MapGet("/consultores", async (
+    IConsultorRepository consultorRepository,
+    CancellationToken cancellationToken) =>
+{
+    var consultores = await consultorRepository.ListAsync(cancellationToken).ConfigureAwait(false);
+
+    var dto = consultores.Select(c => new
+    {
+        c.Id,
+        c.NomeCompleto,
+        c.Email,
+        c.Telefone,
+        c.Ativo,
+        c.CriadoEmUtc
+    });
+
+    return Results.Ok(dto);
+});
+
+// Endpoint para ativar consultor
+app.MapPatch("/consultores/{id:guid}/ativar", async (
+    Guid id,
+    IConsultorRepository consultorRepository,
+    CancellationToken cancellationToken) =>
+{
+    var success = await consultorRepository.ActivateAsync(id, cancellationToken).ConfigureAwait(false);
+
+    return success
+        ? Results.NoContent()
+        : Results.NotFound(new { Error = "CONSULTOR_NAO_ENCONTRADO" });
+});
+
+// Endpoint para desativar consultor
+app.MapPatch("/consultores/{id:guid}/desativar", async (
+    Guid id,
+    IConsultorRepository consultorRepository,
+    CancellationToken cancellationToken) =>
+{
+    var success = await consultorRepository.DeactivateAsync(id, cancellationToken).ConfigureAwait(false);
+
+    return success
+        ? Results.NoContent()
+        : Results.NotFound(new { Error = "CONSULTOR_NAO_ENCONTRADO" });
+});
+
+// Endpoint para soft-delete (exclusão lógica)
+app.MapDelete("/consultores/{id:guid}", async (
+    Guid id,
+    IConsultorRepository consultorRepository,
+    CancellationToken cancellationToken) =>
+{
+    var success = await consultorRepository.SoftDeleteAsync(id, cancellationToken).ConfigureAwait(false);
+
+    return success
+        ? Results.NoContent()
+        : Results.NotFound(new { Error = "CONSULTOR_NAO_ENCONTRADO" });
+});
     }
 
     var consultor = result.Value!;

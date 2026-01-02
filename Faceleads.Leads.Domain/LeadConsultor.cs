@@ -6,7 +6,7 @@ public sealed class LeadConsultor
 
     public Guid LeadId { get; private set; }
 
-    public Guid ConsultorId { get; private set; }
+    public Guid? ConsultorId { get; private set; }
 
     public DateTime AtribuidoEmUtc { get; private set; }
 
@@ -14,7 +14,7 @@ public sealed class LeadConsultor
 
     public Lead Lead { get; private set; } = null!;
 
-    public Consultor Consultor { get; private set; } = null!;
+    public Consultor? Consultor { get; private set; }
 
     private LeadConsultor()
     {

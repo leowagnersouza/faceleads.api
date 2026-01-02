@@ -11,6 +11,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Required by the EF Core tools at design-time in the startup project -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0-preview.4.24267.1" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Faceleads.Leads.Application\Faceleads.Leads.Application.csproj" />
     <ProjectReference Include="..\Faceleads.Leads.Infrastructure\Faceleads.Leads.Infrastructure.csproj" />
   </ItemGroup>

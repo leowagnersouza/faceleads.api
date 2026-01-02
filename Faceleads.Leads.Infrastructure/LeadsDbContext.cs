@@ -76,6 +76,14 @@ public sealed class LeadsDbContext : DbContext
             builder.Property(c => c.CriadoEmUtc)
                 .IsRequired();
 
+            // Soft delete column
+            builder.Property(c => c.IsDeleted)
+                .IsRequired()
+                .HasDefaultValue(false);
+
+            // Global query filter to exclude soft deleted consultores by default
+            builder.HasQueryFilter(c => !c.IsDeleted);
+
             builder.HasMany(c => c.Leads)
                 .WithOne(lc => lc.Consultor)
                 .HasForeignKey(lc => lc.ConsultorId);
