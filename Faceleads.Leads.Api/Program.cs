@@ -5,6 +5,12 @@ using Faceleads.Leads.Domain;
 using Faceleads.Leads.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
+using Faceleads.Leads.Api.Requests;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +30,30 @@ builder.Services.AddScoped<IConsultorRepository, ConsultorRepository>();
 builder.Services.AddScoped<CreateConsultorHandler>();
 builder.Services.AddScoped<GetConsultorByIdHandler>();
 
+// JWT Authentication
+var jwtSettings = builder.Configuration.GetSection("Jwt");
+var jwtIssuer = jwtSettings["Issuer"];
+var jwtAudience = jwtSettings["Audience"];
+var jwtKey = jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is not configured. Set Jwt:Key in configuration or environment.");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtIssuer,
+            ValidateAudience = true,
+            ValidAudience = jwtAudience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(2)
+        };
+    });
+
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -33,6 +63,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Endpoint para criação de consultor
 app.MapPost("/consultores", async (
@@ -49,6 +82,20 @@ app.MapPost("/consultores", async (
             result.ErrorCode,
             result.ErrorMessage
         });
+    }
+
+    var consultor = result.Value!;
+
+    return Results.Created($"/consultores/{consultor.Id}", new
+    {
+        consultor.Id,
+        consultor.NomeCompleto,
+        consultor.Email,
+        consultor.Telefone,
+        consultor.Ativo,
+        consultor.CriadoEmUtc
+    });
+});
 
 // Endpoint para listar consultores (exclui soft-deleted automaticamente)
 app.MapGet("/consultores", async (
@@ -68,7 +115,7 @@ app.MapGet("/consultores", async (
     });
 
     return Results.Ok(dto);
-});
+}).RequireAuthorization();
 
 // Endpoint para ativar consultor
 app.MapPatch("/consultores/{id:guid}/ativar", async (
@@ -81,7 +128,7 @@ app.MapPatch("/consultores/{id:guid}/ativar", async (
     return success
         ? Results.NoContent()
         : Results.NotFound(new { Error = "CONSULTOR_NAO_ENCONTRADO" });
-});
+}).RequireAuthorization();
 
 // Endpoint para desativar consultor
 app.MapPatch("/consultores/{id:guid}/desativar", async (
@@ -94,7 +141,7 @@ app.MapPatch("/consultores/{id:guid}/desativar", async (
     return success
         ? Results.NoContent()
         : Results.NotFound(new { Error = "CONSULTOR_NAO_ENCONTRADO" });
-});
+}).RequireAuthorization();
 
 // Endpoint para soft-delete (exclusão lógica)
 app.MapDelete("/consultores/{id:guid}", async (
@@ -107,20 +154,41 @@ app.MapDelete("/consultores/{id:guid}", async (
     return success
         ? Results.NoContent()
         : Results.NotFound(new { Error = "CONSULTOR_NAO_ENCONTRADO" });
-});
+}).RequireAuthorization();
+
+// Endpoint de login simples para emitir JWT (credenciais em memória para testes)
+app.MapPost("/login", (LoginRequest login) =>
+{
+    // Credenciais de teste hard-coded (não usar em produção)
+    if (login.Username != "admin" || login.Password != "password")
+    {
+        return Results.Unauthorized();
     }
 
-    var consultor = result.Value!;
+    var jwtSettings = builder.Configuration.GetSection("Jwt");
+    var jwtIssuer = jwtSettings["Issuer"]!;
+    var jwtAudience = jwtSettings["Audience"]!;
+    var jwtKey = jwtSettings["Key"]!;
 
-    return Results.Created($"/consultores/{consultor.Id}", new
+    var claims = new[]
     {
-        consultor.Id,
-        consultor.NomeCompleto,
-        consultor.Email,
-        consultor.Telefone,
-        consultor.Ativo,
-        consultor.CriadoEmUtc
-    });
+        new Claim(ClaimTypes.Name, login.Username),
+        new Claim(ClaimTypes.Role, "Admin")
+    };
+
+    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+    var token = new JwtSecurityToken(
+        issuer: jwtIssuer,
+        audience: jwtAudience,
+        claims: claims,
+        expires: DateTime.UtcNow.AddHours(1),
+        signingCredentials: creds);
+
+    var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
+    return Results.Ok(new { access_token = tokenString });
 });
 
 // Endpoint para obter consultor por id
@@ -165,6 +233,6 @@ app.MapGet("/consultores/{id:guid}", async (
         consultor.Ativo,
         consultor.CriadoEmUtc
     });
-});
+}).RequireAuthorization();
 
 app.Run();

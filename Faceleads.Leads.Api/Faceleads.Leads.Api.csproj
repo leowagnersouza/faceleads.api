@@ -16,6 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0-preview.4.24267.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Faceleads.Leads.Application\Faceleads.Leads.Application.csproj" />
     <ProjectReference Include="..\Faceleads.Leads.Infrastructure\Faceleads.Leads.Infrastructure.csproj" />
   </ItemGroup>
