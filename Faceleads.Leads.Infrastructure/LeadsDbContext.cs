@@ -14,6 +14,8 @@ public sealed class LeadsDbContext : DbContext
 
     public DbSet<Consultor> Consultores => Set<Consultor>();
 
+    public DbSet<Faceleads.Leads.Domain.RefreshToken> RefreshTokens => Set<Faceleads.Leads.Domain.RefreshToken>();
+
     public DbSet<LeadConsultor> LeadsConsultores => Set<LeadConsultor>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -99,6 +101,29 @@ public sealed class LeadsDbContext : DbContext
                 .IsRequired();
 
             builder.Property(lc => lc.EncerradoEmUtc);
+        });
+
+        modelBuilder.Entity<RefreshToken>(builder =>
+        {
+            builder.ToTable("RefreshTokens");
+
+            builder.HasKey(rt => rt.Id);
+
+            builder.Property(rt => rt.Token)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            builder.Property(rt => rt.Username)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            builder.Property(rt => rt.ExpiresUtc)
+                .IsRequired();
+
+            builder.Property(rt => rt.CreatedUtc)
+                .IsRequired();
+
+            builder.Property(rt => rt.RevokedUtc);
         });
     }
 }

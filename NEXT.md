@@ -3,10 +3,12 @@ Primeiro, desenvolver uma API para um frontend React para gestão de leads omerci
 Segundo, me preparar para uma entrevista de backnend, e portanto cada passo deve ser exeutado e explicado omo se fosse em uma entrevista.
 
 Vamos usar miroserviços, kafka, redis, sql, azure, docker, etc.
-## Próximo passo: adicionar autenticação
+## Próximos passos
 
-1. Escolher o tipo de autenticação (recomendado: JWT Bearer para APIs REST).
-2. Adicionar pacote de autenticação ao projeto API:
+1. Persistir refresh tokens om hash
+2. Configurar SQL Studio para acessar o banco
+3. Configurar swagger ou equivalente
+4. Testar com PostMan 
 
 ```
 dotnet add Faceleads.Leads.Api package Microsoft.AspNetCore.Authentication.JwtBearer --version 9.0.0-preview.*
@@ -33,6 +35,23 @@ dotnet add Faceleads.Leads.Api package Microsoft.AspNetCore.Authentication.JwtBe
 Notas:
 - Para ambientes de produção use uma chave forte e gerencie segredos via Azure Key Vault ou variáveis de ambiente.
 - Se preferir, podemos integrar `AspNetCore.Identity` ou um provedor externo (Azure AD / IdentityServer) em vez de implementar JWT manualmente.
+
+## Padrão Result
+
+Foi adotado um tipo `Result` para uniformizar retornos de operações na camada de aplicação/serviços. Em vez de lançar exceções para fluxos esperados, os métodos retornam `Result` ou `Result<T>` com os campos:
+
+- `Success` (bool)
+- `ErrorCode` (string?)
+- `ErrorMessage` (string?)
+- `Value` (T?) quando `Result<T>`
+
+Benefícios:
+- Fluxo claro de sucesso vs falha
+- Facilita mapeamento para respostas HTTP
+- Melhora testabilidade (valida resultados sem exceções)
+
+Exemplo de uso no `TokenService`:
+- `Result<(string accessToken, string refreshToken)> RefreshWithTokenAsync(...)`
 
 
 ## Como rodar o SQL Server local via Docker

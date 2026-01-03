@@ -11,6 +11,8 @@ using System.Text;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using Faceleads.Leads.Api.Requests;
+using Faceleads.Leads.Api.Services;
+using System.Security.Cryptography;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +27,8 @@ builder.Services.AddDbContext<LeadsDbContext>(options =>
 // Repositórios
 builder.Services.AddScoped<ILeadRepository, LeadRepository>();
 builder.Services.AddScoped<IConsultorRepository, ConsultorRepository>();
+builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+builder.Services.AddScoped<ITokenService, TokenService>();
 
 // Casos de uso / handlers
 builder.Services.AddScoped<CreateConsultorHandler>();
@@ -157,7 +161,7 @@ app.MapDelete("/consultores/{id:guid}", async (
 }).RequireAuthorization();
 
 // Endpoint de login simples para emitir JWT (credenciais em memória para testes)
-app.MapPost("/login", (LoginRequest login) =>
+app.MapPost("/login", async (LoginRequest login, ITokenService tokenService) =>
 {
     // Credenciais de teste hard-coded (não usar em produção)
     if (login.Username != "admin" || login.Password != "password")
@@ -188,7 +192,42 @@ app.MapPost("/login", (LoginRequest login) =>
 
     var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
-    return Results.Ok(new { access_token = tokenString });
+    var issueResult = await tokenService.IssueTokensAsync(login.Username);
+    if (!issueResult.Success)
+    {
+        return Results.BadRequest(new { issueResult.ErrorCode, issueResult.ErrorMessage });
+    }
+
+    var (accessToken, refreshToken) = issueResult.Value!;
+
+    return Results.Ok(new { access_token = accessToken, refresh_token = refreshToken });
+});
+
+// Endpoint para renovar tokens usando refresh token
+app.MapPost("/refresh", async (RefreshRequest request, ITokenService tokenService) =>
+{
+    try
+    {
+        var refreshResult = await tokenService.RefreshWithTokenAsync(request.RefreshToken);
+        if (!refreshResult.Success)
+        {
+            return Results.Unauthorized();
+        }
+
+        var (accessToken, refreshToken) = refreshResult.Value!;
+        return Results.Ok(new { access_token = accessToken, refresh_token = refreshToken });
+    }
+    catch
+    {
+        return Results.Unauthorized();
+    }
+});
+
+// Endpoint para logout: revoga um refresh token
+app.MapPost("/logout", async (RefreshRequest request, ITokenService tokenService) =>
+{
+    await tokenService.RevokeRefreshTokenAsync(request.RefreshToken);
+    return Results.NoContent();
 });
 
 // Endpoint para obter consultor por id
