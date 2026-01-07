@@ -58,8 +58,8 @@ jobs:
         body: ${{ steps.commit_info.outputs.commit_body }}
         to: ${{ secrets.CLIENT_EMAIL }}
         from: ${{ secrets.EMAIL_FROM }}
-        secure: true
-        # use_ssl: true
+        secure: false
+        use_ssl: false
 
 # Required secrets:
 # - SMTP_SERVER (smtp host)
