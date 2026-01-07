@@ -1,0 +1,75 @@
+name: Notify client on push
+
+on:
+  push:
+    # run on any branch; adjust if you want only 'main'
+    branches: ['**']
+  # allow manual runs for testing
+  workflow_dispatch: {}
+
+jobs:
+  send_email:
+    runs-on: ubuntu-latest
+    # avoid triggering when the runner itself makes commits
+    if: ${{ github.actor != 'github-actions[bot]' }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Gather commit info
+      id: commit_info
+      run: |
+        python - <<'PY' > /tmp/commit_body.txt
+        import json, os
+        p = os.environ.get('GITHUB_EVENT_PATH')
+        ev = json.load(open(p)) if p and os.path.exists(p) else {}
+        repo = os.environ.get('GITHUB_REPOSITORY')
+        ref = os.environ.get('GITHUB_REF')
+        actor = os.environ.get('GITHUB_ACTOR')
+        commits = ev.get('commits', [])
+        lines = [f"Repository: {repo}", f"Ref: {ref}", f"Pusher: {actor}", f"Total commits: {len(commits)}", ""]
+        for c in commits:
+            cid = c.get('id', '')[:7]
+            msg = c.get('message', '').strip().replace('\n', ' ')[:1000]
+            author = c.get('author', {})
+            name = author.get('name') or author.get('username') or ''
+            email = author.get('email') or ''
+            lines.append(f"- {cid} {msg} — {name} <{email}>")
+        body = "\n".join(lines)
+        print(body)
+        with open('/tmp/commit_body.txt', 'w') as f:
+            f.write(body)
+        # set output
+        print(f"body<<EOF\n{body}\nEOF")
+        PY
+        echo "body<<EOF" >> $GITHUB_OUTPUT
+        cat /tmp/commit_body.txt >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Send email to client
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: ${{ secrets.SMTP_SERVER }}
+        server_port: ${{ secrets.SMTP_PORT }}
+        username: ${{ secrets.SMTP_USERNAME }}
+        password: ${{ secrets.SMTP_PASSWORD }}
+        subject: "[${{ github.repository }}] New commit(s) by ${{ github.actor }}"
+        body: ${{ steps.commit_info.outputs.body }}
+        to: ${{ secrets.CLIENT_EMAIL }}
+        from: ${{ secrets.EMAIL_FROM }}
+        secure: true
+        # use_ssl: true
+
+# Required secrets:
+# - SMTP_SERVER (smtp host)
+# - SMTP_PORT (smtp port, e.g. 587)
+# - SMTP_USERNAME
+# - SMTP_PASSWORD
+# - EMAIL_FROM (sender email)
+# - CLIENT_EMAIL (recipient)
+
+# Notes:
+# - Add secrets in the GitHub repository settings: Settings -> Secrets and variables -> Actions
+# - Adjust branch filter above if you want notifications only for 'main'
+# - The workflow uses the push event payload to include commit list in the email body
