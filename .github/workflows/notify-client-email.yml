@@ -59,7 +59,6 @@ jobs:
         to: ${{ secrets.CLIENT_EMAIL }}
         from: ${{ secrets.EMAIL_FROM }}
         secure: false
-        use_ssl: false
 
 # Required secrets:
 # - SMTP_SERVER (smtp host)
