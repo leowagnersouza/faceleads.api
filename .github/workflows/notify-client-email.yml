@@ -40,12 +40,12 @@ jobs:
         print(body)
         with open('/tmp/commit_body.txt', 'w') as f:
             f.write(body)
-        # set output
-        print(f"body<<EOF\n{body}\nEOF")
         PY
-        echo "body<<EOF" >> $GITHUB_OUTPUT
-        cat /tmp/commit_body.txt >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        # use safer way to set multiline output
+        commit_body=$(cat /tmp/commit_body.txt)
+        echo "commit_body<<'BODY'" >> $GITHUB_OUTPUT
+        echo "$commit_body" >> $GITHUB_OUTPUT
+        echo "BODY" >> $GITHUB_OUTPUT
 
     - name: Send email to client
       uses: dawidd6/action-send-mail@v3
