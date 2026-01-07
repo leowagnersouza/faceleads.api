@@ -43,7 +43,7 @@ jobs:
         PY
         # use safer way to set multiline output
         commit_body=$(cat /tmp/commit_body.txt)
-        echo "commit_body<<'BODY'" >> $GITHUB_OUTPUT
+        echo "commit_body<<BODY" >> $GITHUB_OUTPUT
         echo "$commit_body" >> $GITHUB_OUTPUT
         echo "BODY" >> $GITHUB_OUTPUT
 
@@ -55,7 +55,7 @@ jobs:
         username: ${{ secrets.SMTP_USERNAME }}
         password: ${{ secrets.SMTP_PASSWORD }}
         subject: "[${{ github.repository }}] New commit(s) by ${{ github.actor }}"
-        body: ${{ steps.commit_info.outputs.body }}
+        body: ${{ steps.commit_info.outputs.commit_body }}
         to: ${{ secrets.CLIENT_EMAIL }}
         from: ${{ secrets.EMAIL_FROM }}
         secure: true
