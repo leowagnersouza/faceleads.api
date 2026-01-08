@@ -1,0 +1,232 @@
+{
+  "info": {
+    "name": "Faceleads Leads API",
+    "_postman_id": "faceleads-leads-api-collection",
+    "description": "Coleção Postman básica para os endpoints de Consultor (criar e obter).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Create Consultor",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"NomeCompleto\": \"Jo�o Silva\",\n  \"Email\": \"joao@example.com\",\n  \"Telefone\": \"+5511999999999\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/consultores",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "consultores"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "201 Created",
+          "originalRequest": {},
+          "status": "Created",
+          "code": 201,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "body": "{\n  \"Id\": \"00000000-0000-0000-0000-000000000000\"\n}"
+        },
+        {
+          "name": "400 Bad Request",
+          "originalRequest": {},
+          "status": "Bad Request",
+          "code": 400,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "body": "{\n  \"errorCode\": \"CONSULTOR_EMAIL_OBRIGATORIO\",\n  \"errorMessage\": \"Email do consultor � obrigat�rio.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Consultor by Id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/consultores/{{id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "consultores",
+            "{{id}}"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": ""
+            }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {},
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "body": "{\n  \"Id\": \"00000000-0000-0000-0000-000000000000\",\n  \"NomeCompleto\": \"Jo�o Silva\",\n  \"Email\": \"joao@example.com\",\n  \"Telefone\": \"+5511999999999\",\n  \"Ativo\": true,\n  \"CriadoEmUtc\": \"2025-01-01T12:00:00Z\"\n}"
+        },
+        {
+          "name": "404 Not Found",
+          "originalRequest": {},
+          "status": "Not Found",
+          "code": 404,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "body": "{\n  \"errorCode\": \"CONSULTOR_NAO_ENCONTRADO\",\n  \"errorMessage\": \"Consultor n�o encontrado.\"\n}"
+        }
+      ]
+    }
+    ,
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"Username\": \"admin\",\n  \"Password\": \"password\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "login"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {},
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "body": "{\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"refresh_token\": \"base64-refresh-token\"\n}"
+        },
+        {
+          "name": "401 Unauthorized",
+          "originalRequest": {},
+          "status": "Unauthorized",
+          "code": 401,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "body": "{ \"message\": \"Unauthorized\" }"
+        }
+      ]
+    },
+    {
+      "name": "Refresh Token",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"RefreshToken\": \"base64-refresh-token\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/refresh",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "refresh"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {},
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "body": "{\n  \"access_token\": \"new-access-token\",\n  \"refresh_token\": \"new-refresh-token\"\n}"
+        },
+        {
+          "name": "401 Unauthorized",
+          "originalRequest": {},
+          "status": "Unauthorized",
+          "code": 401,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "body": "{\n  \"error\": \"REFRESH_INVALID\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Logout (Revoke Refresh Token)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"RefreshToken\": \"base64-refresh-token\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/logout",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "logout"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "204 No Content",
+          "originalRequest": {},
+          "status": "No Content",
+          "code": 204,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "body": ""
+        }
+      ]
+    }
+  ]
+}
