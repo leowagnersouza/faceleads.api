@@ -12,6 +12,7 @@ using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using Faceleads.Leads.Api.Requests;
 using Faceleads.Leads.Api.Services;
+using Microsoft.OpenApi.Models;
 using System.Security.Cryptography;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -59,7 +60,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 // Swagger/ OpenAPI
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Faceleads Leads API",
+        Version = "v1",
+        Description = "API de gestão de leads e consultores"
+    });
+});
 
 var app = builder.Build();
 
@@ -67,7 +76,10 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Faceleads Leads API v1");
+    });
     app.MapOpenApi();
 }
 
@@ -77,7 +89,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Endpoint para criação de consultor
-app.MapPost("/consultores", async (
+app.MapPost("/api/v1/consultores", async (
     CreateConsultorCommand request,
     CreateConsultorHandler handler,
     CancellationToken cancellationToken) =>
@@ -95,7 +107,7 @@ app.MapPost("/consultores", async (
 
     var consultor = result.Value!;
 
-    return Results.Created($"/consultores/{consultor.Id}", new
+    return Results.Created($"/api/v1/consultores/{consultor.Id}", new
     {
         consultor.Id,
         consultor.NomeCompleto,
@@ -104,7 +116,7 @@ app.MapPost("/consultores", async (
         consultor.Ativo,
         consultor.CriadoEmUtc
     });
-});
+}).RequireAuthorization();
 
 // Endpoint para listar consultores (exclui soft-deleted automaticamente)
 app.MapGet("/consultores", async (
@@ -206,10 +218,10 @@ app.MapPost("/login", async (LoginRequest login, ITokenService tokenService) =>
     var (accessToken, refreshToken) = issueResult.Value!;
 
     return Results.Ok(new { access_token = accessToken, refresh_token = refreshToken });
-});
+}).RequireAuthorization();
 
 // Endpoint para renovar tokens usando refresh token
-app.MapPost("/refresh", async (RefreshRequest request, ITokenService tokenService) =>
+app.MapPost("/api/v1/refresh", async (RefreshRequest request, ITokenService tokenService) =>
 {
     try
     {
@@ -228,15 +240,21 @@ app.MapPost("/refresh", async (RefreshRequest request, ITokenService tokenServic
     }
 });
 
-// Endpoint para logout: revoga um refresh token
+// Endpoint para logout: revoga um refresh token, retornando Result padrão
 app.MapPost("/logout", async (RefreshRequest request, ITokenService tokenService) =>
 {
-    await tokenService.RevokeRefreshTokenAsync(request.RefreshToken);
+    var result = await tokenService.RevokeRefreshTokenAsync(request.RefreshToken).ConfigureAwait(false);
+
+    if (!result.Success)
+    {
+        return Results.BadRequest(new { result.ErrorCode, result.ErrorMessage });
+    }
+
     return Results.NoContent();
 });
 
 // Endpoint para obter consultor por id
-app.MapGet("/consultores/{id:guid}", async (
+app.MapGet("/api/v1/consultores/{id:guid}", async (
     Guid id,
     GetConsultorByIdHandler handler,
     CancellationToken cancellationToken) =>
