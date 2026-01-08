@@ -1,0 +1,41 @@
+name: Export Swagger and Postman collection
+
+on:
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    - name: Restore
+      run: dotnet restore Faceleads.Leads.Api/Faceleads.Leads.Api.csproj
+
+    - name: Build
+      run: dotnet build --no-restore Faceleads.Leads.Api/Faceleads.Leads.Api.csproj -c Release
+
+    - name: Generate swagger.json
+      run: |
+        dotnet tool restore || true
+        dotnet swagger tofile --output swagger.json bin/Release/net9.0/Faceleads.Leads.Api.dll v1
+
+    - name: Convert to Postman collection
+      run: |
+        npm install -g openapi2postmanv2
+        npx openapi2postmanv2 -s swagger.json -o postman_collection.json -p 2
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: openapi-and-postman
+        path: |
+          swagger.json
+          postman_collection.json

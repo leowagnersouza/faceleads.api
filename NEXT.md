@@ -5,10 +5,16 @@ Segundo, me preparar para uma entrevista de backnend, e portanto cada passo deve
 Vamos usar miroserviços, kafka, redis, sql, azure, docker, etc.
 ## Próximos passos
 
-1. Persistir refresh tokens om hash
+1. Persistir refresh tokens om hash - ok
 2. Configurar SQL Studio para acessar o banco
-3. Configurar swagger ou equivalente
+3. Configurar swagger ou equivalente (gerar `swagger.json` e Postman collection)
 4. Testar com PostMan 
+
+## Outras melhorias (baixa prioridade)
+- Avaliar e integrar `MediatR` (Mediator pattern) para despachar comandos/queries e permitir pipelines (validação, logging, transações). Começar com um caso de uso de exemplo (ex.: `CreateConsultor`) antes de adotar amplamente.
+
+- Adicionar testes de integração usando `WebApplicationFactory<TEntryPoint>` (Microsoft.AspNetCore.Mvc.Testing) para validar endpoints críticos (`/login`, `/refresh`, `/logout`) como parte da CI. Começar com cenários de sucesso e falha para garantir contrato e regressão.
+
 
 ```
 dotnet add Faceleads.Leads.Api package Microsoft.AspNetCore.Authentication.JwtBearer --version 9.0.0-preview.*
@@ -52,7 +58,6 @@ Benefícios:
 
 Exemplo de uso no `TokenService`:
 - `Result<(string accessToken, string refreshToken)> RefreshWithTokenAsync(...)`
-
 
 ## Como rodar o SQL Server local via Docker
 
