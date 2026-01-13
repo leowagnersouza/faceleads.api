@@ -59,6 +59,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
+// CORS - permitir o frontend React em desenvolvimento
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactDev", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 // Swagger/ OpenAPI
 builder.Services.AddSwaggerGen(c =>
 {
@@ -84,6 +96,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Habilita CORS antes de autenticação/autorização
+app.UseCors("AllowReactDev");
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -117,6 +132,49 @@ app.MapPost("/api/v1/consultores", async (
         consultor.CriadoEmUtc
     });
 }).RequireAuthorization();
+
+// Backward-compatible route: api versioned login
+app.MapPost("/api/v1/login", async (LoginRequest login, ITokenService tokenService) =>
+{
+    // Credenciais de teste hard-coded (não usar em produção)
+    if (login.Username != "admin" || login.Password != "password")
+    {
+        return Results.Unauthorized();
+    }
+
+    var jwtSettings = builder.Configuration.GetSection("Jwt");
+    var jwtIssuer = jwtSettings["Issuer"]!;
+    var jwtAudience = jwtSettings["Audience"]!;
+    var jwtKey = jwtSettings["Key"]!;
+
+    var claims = new[]
+    {
+        new Claim(ClaimTypes.Name, login.Username),
+        new Claim(ClaimTypes.Role, "Admin")
+    };
+
+    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+    var token = new JwtSecurityToken(
+        issuer: jwtIssuer,
+        audience: jwtAudience,
+        claims: claims,
+        expires: DateTime.UtcNow.AddHours(1),
+        signingCredentials: creds);
+
+    var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
+    var issueResult = await tokenService.IssueTokensAsync(login.Username);
+    if (!issueResult.Success)
+    {
+        return Results.BadRequest(new { issueResult.ErrorCode, issueResult.ErrorMessage });
+    }
+
+    var (accessToken, refreshToken) = issueResult.Value!;
+
+    return Results.Ok(new { access_token = accessToken, refresh_token = refreshToken });
+});
 
 // Endpoint para listar consultores (exclui soft-deleted automaticamente)
 app.MapGet("/consultores", async (
@@ -175,49 +233,6 @@ app.MapDelete("/consultores/{id:guid}", async (
     return success
         ? Results.NoContent()
         : Results.NotFound(new { Error = "CONSULTOR_NAO_ENCONTRADO" });
-}).RequireAuthorization();
-
-// Endpoint de login simples para emitir JWT (credenciais em memória para testes)
-app.MapPost("/login", async (LoginRequest login, ITokenService tokenService) =>
-{
-    // Credenciais de teste hard-coded (não usar em produção)
-    if (login.Username != "admin" || login.Password != "password")
-    {
-        return Results.Unauthorized();
-    }
-
-    var jwtSettings = builder.Configuration.GetSection("Jwt");
-    var jwtIssuer = jwtSettings["Issuer"]!;
-    var jwtAudience = jwtSettings["Audience"]!;
-    var jwtKey = jwtSettings["Key"]!;
-
-    var claims = new[]
-    {
-        new Claim(ClaimTypes.Name, login.Username),
-        new Claim(ClaimTypes.Role, "Admin")
-    };
-
-    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
-    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-    var token = new JwtSecurityToken(
-        issuer: jwtIssuer,
-        audience: jwtAudience,
-        claims: claims,
-        expires: DateTime.UtcNow.AddHours(1),
-        signingCredentials: creds);
-
-    var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
-
-    var issueResult = await tokenService.IssueTokensAsync(login.Username);
-    if (!issueResult.Success)
-    {
-        return Results.BadRequest(new { issueResult.ErrorCode, issueResult.ErrorMessage });
-    }
-
-    var (accessToken, refreshToken) = issueResult.Value!;
-
-    return Results.Ok(new { access_token = accessToken, refresh_token = refreshToken });
 }).RequireAuthorization();
 
 // Endpoint para renovar tokens usando refresh token
