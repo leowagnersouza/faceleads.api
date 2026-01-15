@@ -1,6 +1,7 @@
 using Faceleads.Leads.Application.Common;
 using Faceleads.Leads.Application.CreateConsultor;
 using Faceleads.Leads.Application.GetConsultorById;
+using Faceleads.Leads.Application.ListConsultores;
 using Faceleads.Leads.Domain;
 using Faceleads.Leads.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +35,7 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 // Casos de uso / handlers
 builder.Services.AddScoped<CreateConsultorHandler>();
 builder.Services.AddScoped<GetConsultorByIdHandler>();
+builder.Services.AddScoped<ListConsultoresHandler>();
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -176,14 +178,20 @@ app.MapPost("/api/v1/login", async (LoginRequest login, ITokenService tokenServi
     return Results.Ok(new { access_token = accessToken, refresh_token = refreshToken });
 });
 
-// Endpoint para listar consultores (exclui soft-deleted automaticamente)
-app.MapGet("/consultores", async (
-    IConsultorRepository consultorRepository,
+
+// Versão API v1: listar consultores
+app.MapGet("/api/v1/consultores", async (
+    Faceleads.Leads.Application.ListConsultores.ListConsultoresHandler handler,
     CancellationToken cancellationToken) =>
 {
-    var consultores = await consultorRepository.ListAsync(cancellationToken).ConfigureAwait(false);
+    var result = await handler.HandleAsync(new Faceleads.Leads.Application.ListConsultores.ListConsultoresQuery(), cancellationToken).ConfigureAwait(false);
 
-    var dto = consultores.Select(c => new
+    if (!result.Success)
+    {
+        return Results.BadRequest(new { result.ErrorCode, result.ErrorMessage });
+    }
+
+    var dto = result.Value!.Select(c => new
     {
         c.Id,
         c.NomeCompleto,
