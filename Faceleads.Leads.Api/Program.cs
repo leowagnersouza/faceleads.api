@@ -115,16 +115,12 @@ app.MapPost("/api/v1/consultores", async (
 
     if (!result.Success)
     {
-        return Results.BadRequest(new
-        {
-            result.ErrorCode,
-            result.ErrorMessage
-        });
+        return Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty));
     }
 
     var consultor = result.Value!;
 
-    return Results.Created($"/api/v1/consultores/{consultor.Id}", new
+    var createdPayload = new
     {
         consultor.Id,
         consultor.NomeCompleto,
@@ -132,7 +128,9 @@ app.MapPost("/api/v1/consultores", async (
         consultor.Telefone,
         consultor.Ativo,
         consultor.CriadoEmUtc
-    });
+    };
+
+    return Results.Created($"/api/v1/consultores/{consultor.Id}", Result<object>.Ok(createdPayload));
 }).RequireAuthorization();
 
 // Backward-compatible route: api versioned login
@@ -141,7 +139,7 @@ app.MapPost("/api/v1/login", async (LoginRequest login, ITokenService tokenServi
     // Credenciais de teste hard-coded (não usar em produção)
     if (login.Username != "admin" || login.Password != "password")
     {
-        return Results.Unauthorized();
+        return Results.Json(Result.Fail("AUTH_INVALID", "Credenciais inválidas."), statusCode: 401);
     }
 
     var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -170,25 +168,25 @@ app.MapPost("/api/v1/login", async (LoginRequest login, ITokenService tokenServi
     var issueResult = await tokenService.IssueTokensAsync(login.Username);
     if (!issueResult.Success)
     {
-        return Results.BadRequest(new { issueResult.ErrorCode, issueResult.ErrorMessage });
+        return Results.BadRequest(Result.Fail(issueResult.ErrorCode ?? "ERROR", issueResult.ErrorMessage ?? string.Empty));
     }
 
     var (accessToken, refreshToken) = issueResult.Value!;
 
-    return Results.Ok(new { access_token = accessToken, refresh_token = refreshToken });
+    var payload = new { access_token = accessToken, refresh_token = refreshToken };
+    return Results.Ok(Result<object>.Ok(payload));
 });
 
-
-// Versão API v1: listar consultores
+// Versão API v1: listar consultores (usa mesmo handler e padrão Result)
 app.MapGet("/api/v1/consultores", async (
-    Faceleads.Leads.Application.ListConsultores.ListConsultoresHandler handler,
+    ListConsultoresHandler handler,
     CancellationToken cancellationToken) =>
 {
-    var result = await handler.HandleAsync(new Faceleads.Leads.Application.ListConsultores.ListConsultoresQuery(), cancellationToken).ConfigureAwait(false);
+    var result = await handler.HandleAsync(new ListConsultoresQuery(), cancellationToken).ConfigureAwait(false);
 
     if (!result.Success)
     {
-        return Results.BadRequest(new { result.ErrorCode, result.ErrorMessage });
+        return Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty));
     }
 
     var dto = result.Value!.Select(c => new
@@ -199,9 +197,9 @@ app.MapGet("/api/v1/consultores", async (
         c.Telefone,
         c.Ativo,
         c.CriadoEmUtc
-    });
+    }).ToList();
 
-    return Results.Ok(dto);
+    return Results.Ok(Result<IEnumerable<object>>.Ok(dto.Cast<object>()));
 }).RequireAuthorization();
 
 // Endpoint para ativar consultor
@@ -251,11 +249,12 @@ app.MapPost("/api/v1/refresh", async (RefreshRequest request, ITokenService toke
         var refreshResult = await tokenService.RefreshWithTokenAsync(request.RefreshToken);
         if (!refreshResult.Success)
         {
-            return Results.Unauthorized();
+            return Results.Json(Result.Fail(refreshResult.ErrorCode ?? "REFRESH_INVALID", refreshResult.ErrorMessage ?? string.Empty), statusCode: 401);
         }
 
         var (accessToken, refreshToken) = refreshResult.Value!;
-        return Results.Ok(new { access_token = accessToken, refresh_token = refreshToken });
+        var payload = new { access_token = accessToken, refresh_token = refreshToken };
+        return Results.Ok(Result<object>.Ok(payload));
     }
     catch
     {
@@ -289,27 +288,15 @@ app.MapGet("/api/v1/consultores/{id:guid}", async (
         // Diferenciar ID inválido (400) de não encontrado (404) pelo código de erro
         return result.ErrorCode switch
         {
-            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(new
-            {
-                result.ErrorCode,
-                result.ErrorMessage
-            }),
-            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(new
-            {
-                result.ErrorCode,
-                result.ErrorMessage
-            }),
-            _ => Results.BadRequest(new
-            {
-                result.ErrorCode,
-                result.ErrorMessage
-            })
+            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(result.ErrorCode, result.ErrorMessage ?? string.Empty)),
+            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(result.ErrorCode, result.ErrorMessage ?? string.Empty)),
+            _ => Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty))
         };
     }
 
     var consultor = result.Value!;
 
-    return Results.Ok(new
+    var payload = new
     {
         consultor.Id,
         consultor.NomeCompleto,
@@ -317,7 +304,9 @@ app.MapGet("/api/v1/consultores/{id:guid}", async (
         consultor.Telefone,
         consultor.Ativo,
         consultor.CriadoEmUtc
-    });
+    };
+
+    return Results.Ok(Result<object>.Ok(payload));
 }).RequireAuthorization();
 
 app.Run();

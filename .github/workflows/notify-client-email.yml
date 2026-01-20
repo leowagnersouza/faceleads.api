@@ -1,72 +1,58 @@
-name: Notify client on push
+﻿name: Send Email on Commit
 
 on:
-  # Disabled automatic push trigger while SMTP provider is being configured.
-  # Use manual dispatch to run the workflow for testing.
-  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+      - develop
 
 jobs:
-  send_email:
+  send-email:
     runs-on: ubuntu-latest
-    # avoid triggering when the runner itself makes commits
-    if: ${{ github.actor != 'github-actions[bot]' }}
-
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Gather commit info
-      id: commit_info
-      run: |
-        python - <<'PY' > /tmp/commit_body.txt
-        import json, os
-        p = os.environ.get('GITHUB_EVENT_PATH')
-        ev = json.load(open(p)) if p and os.path.exists(p) else {}
-        repo = os.environ.get('GITHUB_REPOSITORY')
-        ref = os.environ.get('GITHUB_REF')
-        actor = os.environ.get('GITHUB_ACTOR')
-        commits = ev.get('commits', [])
-        lines = [f"Repository: {repo}", f"Ref: {ref}", f"Pusher: {actor}", f"Total commits: {len(commits)}", ""]
-        for c in commits:
-            cid = c.get('id', '')[:7]
-            msg = c.get('message', '').strip().replace('\n', ' ')[:1000]
-            author = c.get('author', {})
-            name = author.get('name') or author.get('username') or ''
-            email = author.get('email') or ''
-            lines.append(f"- {cid} {msg} � {name} <{email}>")
-        body = "\n".join(lines)
-        print(body)
-        with open('/tmp/commit_body.txt', 'w') as f:
-            f.write(body)
-        PY
-        # use safer way to set multiline output
-        commit_body=$(cat /tmp/commit_body.txt)
-        echo "commit_body<<BODY" >> $GITHUB_OUTPUT
-        echo "$commit_body" >> $GITHUB_OUTPUT
-        echo "BODY" >> $GITHUB_OUTPUT
+      - name: Extract commit info
+        id: commit-info
+        run: |
+          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+          COMMIT_AUTHOR=$(git log -1 --pretty=%an)
+          COMMIT_DATE=$(git log -1 --pretty=%ai)
+          COMMIT_SHA=$(git log -1 --pretty=%h)
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          
+          echo "message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
+          echo "author=$COMMIT_AUTHOR" >> $GITHUB_OUTPUT
+          echo "date=$COMMIT_DATE" >> $GITHUB_OUTPUT
+          echo "sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 
-    - name: Send email to client
-      uses: dawidd6/action-send-mail@v3
-      with:
-        server_address: ${{ secrets.SMTP_SERVER }}
-        server_port: ${{ secrets.SMTP_PORT }}
-        username: ${{ secrets.SMTP_USERNAME }}
-        password: ${{ secrets.SMTP_PASSWORD }}
-        subject: "[${{ github.repository }}] New commit(s) by ${{ github.actor }}"
-        body: ${{ steps.commit_info.outputs.commit_body }}
-        to: ${{ secrets.CLIENT_EMAIL }}
-        from: ${{ secrets.EMAIL_FROM }}
-        secure: false
-
-# Required secrets:
-# - SMTP_SERVER (smtp host)
-# - SMTP_PORT (smtp port, e.g. 587)
-# - SMTP_USERNAME
-# - SMTP_PASSWORD
-# - EMAIL_FROM (sender email)
-# - CLIENT_EMAIL (recipient)
-
-# Notes:
-# - Add secrets in the GitHub repository settings: Settings -> Secrets and variables -> Actions
-# - Adjust branch filter above if you want notifications only for 'main'
-# - The workflow uses the push event payload to include commit list in the email body
+      - name: Send email notification
+        uses: dawidd6/action-send-mail@v3
+        with:
+          # Gmail SMTP
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.EMAIL_SENDER }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "✅ Novo commit no repositório faceleads"
+          to: leowsouza@outlook.com.br,gabriela@mmadben.com.br
+          from: ${{ secrets.EMAIL_SENDER }}
+          body: |
+            Novo commit realizado no repositório faceleads!
+            
+            📌 Branch: ${{ steps.commit-info.outputs.branch }}
+            👤 Autor: ${{ steps.commit-info.outputs.author }}
+            📅 Data: ${{ steps.commit-info.outputs.date }}
+            🔗 Commit: ${{ steps.commit-info.outputs.sha }}
+            
+            📝 Mensagem do commit:
+            ${{ steps.commit-info.outputs.message }}
+            
+            ---
+            Repositório: ${{ github.repository }}
+            Link: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}

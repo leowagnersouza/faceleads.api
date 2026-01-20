@@ -9,6 +9,13 @@ Vamos usar miroserviços, kafka, redis, sql, azure, docker, etc.
 2. Configurar SQL Studio para acessar o banco
 3. Configurar swagger ou equivalente (gerar `swagger.json` e Postman collection)
 4. Testar com PostMan 
+5. Migrar o banco para a nuvem (próximo passo)
+   - Escolher serviço Azure (Azure SQL Database | Managed Instance | SQL em VM) conforme requisitos.
+   - Provisionar recurso no Azure (CLI/Portal/Bicep). Preferência: Managed Instance para alta compatibilidade ou Azure SQL Database para PaaS simples.
+   - Configurar rede (firewall / VNet) e credenciais.
+   - Atualizar `appsettings` / usar Azure Key Vault para connection string segura.
+   - Aplicar migrations remotas: `dotnet ef database update --project Faceleads.Leads.Infrastructure --startup-project Faceleads.Leads.Api`.
+   - Validar endpoints e política de CORS/segurança.
 
 ## Outras melhorias (baixa prioridade)
 - Avaliar e integrar `MediatR` (Mediator pattern) para despachar comandos/queries e permitir pipelines (validação, logging, transações). Começar com um caso de uso de exemplo (ex.: `CreateConsultor`) antes de adotar amplamente.

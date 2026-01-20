@@ -1,0 +1,211 @@
+{
+  "info": {
+    "name": "Faceleads Leads API",
+    "_postman_id": "faceleads-leads-api-collection",
+    "description": "Cole��o Postman b�sica para os endpoints de Consultor (criar e obter).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://localhost:7062",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Create Consultor",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"NomeCompleto\": \"Jo�o Silva\",\n  \"Email\": \"joao@example.com\",\n  \"Telefone\": \"+5511999999999\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/consultores",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "consultores"
+          ]
+        }
+      }
+    },
+    {
+      "name": "List Consultores v1",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/consultores",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "consultores"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Consultor by Id",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/consultores/{{id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "consultores",
+            "{{id}}"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"Username\": \"admin\",\n  \"Password\": \"password\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Refresh Token",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"RefreshToken\": \"base64-refresh-token\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/refresh",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "refresh"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Logout (Revoke Refresh Token)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"RefreshToken\": \"base64-refresh-token\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/logout",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "logout"
+          ]
+        }
+      }
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// define baseUrl and access_token if not set",
+          "pm.environment.set('baseUrl', pm.environment.get('baseUrl') || 'https://localhost:7062');",
+          "pm.environment.set('access_token', pm.environment.get('access_token') || '');"
+        ],
+        "type": "text/javascript"
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "exec": [
+          "// if login response contains access_token, save it to environment",
+          "try {",
+          "  var json = pm.response.json();",
+          "  if (json && json.access_token) {",
+          "    pm.environment.set('access_token', json.access_token);",
+          "  }",
+          "} catch (e) {}"
+        ],
+        "type": "text/javascript"
+      }
+    }
+  ]
+}

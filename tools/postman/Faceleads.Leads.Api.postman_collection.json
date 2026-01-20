@@ -2,164 +2,105 @@
   "info": {
     "name": "Faceleads Leads API",
     "_postman_id": "faceleads-leads-api-collection",
-    "description": "Coleção Postman básica para os endpoints de Consultor (criar e obter).",
+    "description": "Coleção Postman para Faceleads API (v1).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://localhost:7062",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
   "item": [
     {
-      "name": "Create Consultor",
+      "name": "Auth / Login",
       "request": {
         "method": "POST",
         "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"NomeCompleto\": \"João Silva\",\n  \"Email\": \"joao@example.com\",\n  \"Telefone\": \"+5511999999999\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/consultores",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "consultores"
-          ]
-        }
-      }
-    },
-    {
-      "name": "List Consultores v1",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/consultores",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "consultores"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get Consultor by Id",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/consultores/{{id}}",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "consultores",
-            "{{id}}"
-          ],
-          "variable": [
-            {
-              "key": "id",
-              "value": ""
-            }
-          ]
-        }
-      }
-    },
-    {
-      "name": "Login",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
+          { "key": "Content-Type", "value": "application/json" }
         ],
         "body": {
           "mode": "raw",
           "raw": "{\n  \"Username\": \"admin\",\n  \"Password\": \"password\"\n}"
         },
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/login",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "login"
-          ]
+        "url": { "raw": "{{baseUrl}}/api/v1/login", "host": ["{{baseUrl}}"], "path": ["api","v1","login"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "try {",
+              "  var json = pm.response.json();",
+              "  if (json && json.access_token) {",
+              "    pm.environment.set('access_token', json.access_token);",
+              "  }",
+              "} catch (e) {}"
+            ],
+            "type": "text/javascript"
+          }
         }
-      }
+      ]
     },
     {
-      "name": "Refresh Token",
+      "name": "Auth / Refresh",
       "request": {
         "method": "POST",
         "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
+          { "key": "Content-Type", "value": "application/json" }
         ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"RefreshToken\": \"base64-refresh-token\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/refresh",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "refresh"
-          ]
-        }
+        "body": { "mode": "raw", "raw": "{\n  \"RefreshToken\": \"<refresh-token>\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/v1/refresh", "host": ["{{baseUrl}}"], "path": ["api","v1","refresh"] }
       }
     },
     {
-      "name": "Logout (Revoke Refresh Token)",
+      "name": "Auth / Logout",
       "request": {
         "method": "POST",
         "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" }
         ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"RefreshToken\": \"base64-refresh-token\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/logout",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "logout"
-          ]
-        }
+        "body": { "mode": "raw", "raw": "{\n  \"RefreshToken\": \"<refresh-token>\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/v1/logout", "host": ["{{baseUrl}}"], "path": ["api","v1","logout"] }
+      }
+    },
+    {
+      "name": "Consultores / List (v1)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{access_token}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/api/v1/consultores", "host": ["{{baseUrl}}"], "path": ["api","v1","consultores"] }
+      }
+    },
+    {
+      "name": "Consultores / Get by Id (v1)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{access_token}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/api/v1/consultores/{{id}}", "host": ["{{baseUrl}}"], "path": ["api","v1","consultores","{{id}}"], "variable": [ { "key": "id", "value": "" } ] }
+      }
+    },
+    {
+      "name": "Consultores / Create (v1)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"NomeCompleto\": \"João Silva\",\n  \"Email\": \"joao@example.com\",\n  \"Telefone\": \"+5511999999999\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/v1/consultores", "host": ["{{baseUrl}}"], "path": ["api","v1","consultores"] }
       }
     }
   ],
@@ -168,24 +109,9 @@
       "listen": "prerequest",
       "script": {
         "exec": [
-          "// define baseUrl and access_token if not set",
+          "// ensure environment variables exist",
           "pm.environment.set('baseUrl', pm.environment.get('baseUrl') || 'https://localhost:7062');",
           "pm.environment.set('access_token', pm.environment.get('access_token') || '');"
-        ],
-        "type": "text/javascript"
-      }
-    },
-    {
-      "listen": "test",
-      "script": {
-        "exec": [
-          "// if login response contains access_token, save it to environment",
-          "try {",
-          "  var json = pm.response.json();",
-          "  if (json && json.access_token) {",
-          "    pm.environment.set('access_token', json.access_token);",
-          "  }",
-          "} catch (e) {}"
         ],
         "type": "text/javascript"
       }
