@@ -17,6 +17,8 @@ public sealed class LeadsDbContext : DbContext
     public DbSet<Faceleads.Leads.Domain.RefreshToken> RefreshTokens => Set<Faceleads.Leads.Domain.RefreshToken>();
 
     public DbSet<LeadConsultor> LeadsConsultores => Set<LeadConsultor>();
+    
+    public DbSet<Tenant> Tenants => Set<Tenant>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -124,6 +126,27 @@ public sealed class LeadsDbContext : DbContext
                 .IsRequired();
 
             builder.Property(rt => rt.RevokedUtc);
+        });
+
+        modelBuilder.Entity<Tenant>(builder =>
+        {
+            builder.ToTable("Tenants");
+
+            builder.HasKey(t => t.Id);
+
+            builder.Property(t => t.Nome)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            builder.Property(t => t.Descricao)
+                .HasMaxLength(1000);
+
+            builder.Property(t => t.Ativo)
+                .IsRequired()
+                .HasDefaultValue(true);
+
+            builder.Property(t => t.CriadoEmUtc)
+                .IsRequired();
         });
     }
 }
