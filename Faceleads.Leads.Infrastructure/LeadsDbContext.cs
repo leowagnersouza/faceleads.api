@@ -22,6 +22,31 @@ public sealed class LeadsDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Add shadow properties for auditing across all entities
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            // Skip owned types
+            if (entityType.IsOwned()) continue;
+
+            // Add shadow properties if not already present
+            if (entityType.FindProperty("CreatedBy") == null)
+            {
+                modelBuilder.Entity(entityType.ClrType).Property<string?>("CreatedBy");
+            }
+            if (entityType.FindProperty("CreatedOn") == null)
+            {
+                modelBuilder.Entity(entityType.ClrType).Property<DateTime?>("CreatedOn");
+            }
+            if (entityType.FindProperty("ModifiedBy") == null)
+            {
+                modelBuilder.Entity(entityType.ClrType).Property<string?>("ModifiedBy");
+            }
+            if (entityType.FindProperty("ModifiedOn") == null)
+            {
+                modelBuilder.Entity(entityType.ClrType).Property<DateTime?>("ModifiedOn");
+            }
+        }
+
         modelBuilder.Entity<Lead>(builder =>
         {
             builder.ToTable("Leads");

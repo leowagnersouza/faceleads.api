@@ -23,8 +23,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 // DbContext configurado para SQL Server. A connection string deve ser configurada em appsettings.
-builder.Services.AddDbContext<LeadsDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("LeadsDatabase")));
+builder.Services.AddDbContext<LeadsDbContext>((serviceProvider, options) =>
+{
+    options.UseSqlServer(builder.Configuration.GetConnectionString("LeadsDatabase"));
+    // Add interceptor resolved from the DI container
+    options.AddInterceptors(serviceProvider.GetRequiredService<Faceleads.Leads.Infrastructure.Interceptors.AuditingSaveChangesInterceptor>());
+});
 
 // Repositórios
 builder.Services.AddScoped<ILeadRepository, LeadRepository>();
@@ -58,6 +62,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ClockSkew = TimeSpan.FromMinutes(2)
         };
     });
+
+// Register auditing support
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Faceleads.Leads.Application.Common.ICurrentUserService, Faceleads.Leads.Api.Services.CurrentUserService>();
+builder.Services.AddScoped<Faceleads.Leads.Infrastructure.Interceptors.AuditingSaveChangesInterceptor>();
 
 builder.Services.AddAuthorization();
 
