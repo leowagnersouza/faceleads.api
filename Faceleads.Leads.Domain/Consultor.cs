@@ -4,6 +4,9 @@ public sealed class Consultor
 {
     public Guid Id { get; private set; }
 
+    // Tenant identifier (non-nullable after backfill)
+    public Guid TenantId { get; private set; }
+
     public string NomeCompleto { get; private set; } = string.Empty;
 
     public string Email { get; private set; } = string.Empty;

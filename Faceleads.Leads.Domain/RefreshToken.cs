@@ -3,6 +3,9 @@ namespace Faceleads.Leads.Domain;
 public sealed class RefreshToken
 {
     public Guid Id { get; private set; }
+   
+    // Tenant identifier (non-nullable after backfill)
+    public Guid TenantId { get; private set; }
 
     public string Token { get; private set; } = string.Empty;
 

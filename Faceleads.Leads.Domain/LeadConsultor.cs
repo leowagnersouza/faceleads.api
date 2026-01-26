@@ -4,6 +4,9 @@ public sealed class LeadConsultor
 {
     public Guid Id { get; private set; }
 
+    // Tenant identifier (non-nullable after backfill)
+    public Guid TenantId { get; private set; }
+
     public Guid LeadId { get; private set; }
 
     public Guid? ConsultorId { get; private set; }

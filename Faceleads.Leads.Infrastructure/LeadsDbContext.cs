@@ -86,6 +86,7 @@ public sealed class LeadsDbContext : DbContext
                 .HasDefaultValue(false);
 
             // Global query filter to exclude soft deleted consultores by default
+            // Tenant filter will be applied later when TenantProvider is implemented
             builder.HasQueryFilter(c => !c.IsDeleted);
 
             builder.HasMany(c => c.Leads)
