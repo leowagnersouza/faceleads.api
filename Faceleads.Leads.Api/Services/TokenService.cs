@@ -27,9 +27,12 @@ public sealed class TokenService : ITokenService
         var jwtAudience = jwtSettings["Audience"]!;
         var jwtKey = jwtSettings["Key"]!;
 
+        // Include tenant_id claim for now with default tenant (dev). Replace with user lookup when available.
+        var defaultTenantId = "e7a1f3c2-9b4d-4f6a-8c12-3b9d2f0a6e5f";
         var claims = new[]
         {
-            new Claim(ClaimTypes.Name, username)
+            new Claim(ClaimTypes.Name, username),
+            new Claim("tenant_id", defaultTenantId)
         };
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
@@ -64,8 +67,9 @@ public sealed class TokenService : ITokenService
         var jwtIssuer = jwtSettings["Issuer"]!;
         var jwtAudience = jwtSettings["Audience"]!;
         var jwtKey = jwtSettings["Key"]!;
-
-        var claims = new[] { new Claim(ClaimTypes.Name, existing.Username) };
+        // Keep tenant claim from the existing token/user. For now use default tenant id.
+        var defaultTenantId = "e7a1f3c2-9b4d-4f6a-8c12-3b9d2f0a6e5f";
+        var claims = new[] { new Claim(ClaimTypes.Name, existing.Username), new Claim("tenant_id", defaultTenantId) };
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 

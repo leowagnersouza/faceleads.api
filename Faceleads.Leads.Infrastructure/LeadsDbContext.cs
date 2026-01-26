@@ -3,12 +3,27 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Faceleads.Leads.Infrastructure;
 
+using Faceleads.Leads.Application.Common;
+using System.Linq.Expressions;
+
 public sealed class LeadsDbContext : DbContext
 {
+    private readonly ICurrentTenantService? _currentTenantService;
+
     public LeadsDbContext(DbContextOptions<LeadsDbContext> options)
         : base(options)
     {
     }
+
+    // Used at runtime when DI can provide the current tenant
+    public LeadsDbContext(DbContextOptions<LeadsDbContext> options, ICurrentTenantService currentTenantService)
+        : base(options)
+    {
+        _currentTenantService = currentTenantService;
+    }
+
+    // Exposed property used by EF Core query filters. Returns Guid.Empty when no tenant available.
+    public Guid CurrentTenantId => _currentTenantService?.TenantId ?? Guid.Empty;
 
     public DbSet<Lead> Leads => Set<Lead>();
 
@@ -81,6 +96,30 @@ public sealed class LeadsDbContext : DbContext
                 .WithOne(lc => lc.Lead)
                 .HasForeignKey(lc => lc.LeadId);
         });
+
+        // Apply a query filter for TenantId when the property exists
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            var tenantProperty = entityType.FindProperty("TenantId");
+            if (tenantProperty == null) continue;
+
+            var clrType = entityType.ClrType;
+            var parameter = Expression.Parameter(clrType, "e");
+
+            // Build EF.Property<Guid>(e, "TenantId")
+            var propertyMethod = typeof(EF).GetMethod("Property", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.MakeGenericMethod(typeof(Guid));
+            var propertyAccess = Expression.Call(propertyMethod!, parameter, Expression.Constant("TenantId"));
+
+            // Build access to this.CurrentTenantId
+            var currentTenantProperty = Expression.Property(Expression.Constant(this), nameof(CurrentTenantId));
+
+            // Build equality expression: EF.Property<Guid>(e, "TenantId") == this.CurrentTenantId
+            var body = Expression.Equal(propertyAccess, currentTenantProperty);
+
+            var lambda = Expression.Lambda(body, parameter);
+
+            modelBuilder.Entity(clrType).HasQueryFilter(lambda);
+        }
 
         modelBuilder.Entity<Consultor>(builder =>
         {

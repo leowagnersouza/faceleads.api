@@ -2,6 +2,8 @@ using Faceleads.Leads.Application.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
+// Interceptor also assigns TenantId for new entities when available
+
 namespace Faceleads.Leads.Infrastructure.Interceptors;
 
 public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
@@ -36,6 +38,26 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
         {
             if (entry.State == EntityState.Added)
             {
+                // If entity has a TenantId property, set it from the current tenant service (if available)
+                var tenantProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "TenantId");
+                if (tenantProp != null && tenantProp.CurrentValue is null)
+                {
+                    try
+                    {
+                        var tenantService = context as Microsoft.EntityFrameworkCore.Infrastructure.IInfrastructure<IServiceProvider>;
+                        var sp = tenantService?.Instance;
+                        var currentTenant = sp?.GetService(typeof(Faceleads.Leads.Application.Common.ICurrentTenantService)) as Faceleads.Leads.Application.Common.ICurrentTenantService;
+                        if (tenantService != null)
+                        {
+                            tenantProp.CurrentValue = currentTenant?.TenantId;
+                        }
+                    }
+                    catch
+                    {
+                        // ignore if tenant service not available at design-time or other contexts
+                    }
+                }
+
                 if (entry.Property("CreatedOn") != null)
                 {
                     entry.Property("CreatedOn").CurrentValue = now;

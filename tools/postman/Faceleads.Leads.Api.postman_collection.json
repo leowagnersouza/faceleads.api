@@ -2,7 +2,7 @@
   "info": {
     "name": "Faceleads Leads API",
     "_postman_id": "faceleads-leads-api-collection",
-    "description": "Coleção Postman para Faceleads API (v1).",
+    "description": "Colecao Postman para Faceleads API (v1).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -17,6 +17,16 @@
       "type": "string"
     }
   ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
   "item": [
     {
       "name": "Auth / Login",
@@ -99,7 +109,7 @@
           { "key": "Content-Type", "value": "application/json" },
           { "key": "Authorization", "value": "Bearer {{access_token}}" }
         ],
-        "body": { "mode": "raw", "raw": "{\n  \"NomeCompleto\": \"João Silva\",\n  \"Email\": \"joao@example.com\",\n  \"Telefone\": \"+5511999999999\"\n}" },
+        "body": { "mode": "raw", "raw": "{\n  \"NomeCompleto\": \"Joao Silva\",\n  \"Email\": \"joao@example.com\",\n  \"Telefone\": \"+5511999999999\"\n}" },
         "url": { "raw": "{{baseUrl}}/api/v1/consultores", "host": ["{{baseUrl}}"], "path": ["api","v1","consultores"] }
       }
     }
