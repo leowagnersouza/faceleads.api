@@ -1,0 +1,1 @@
+Server=tcp:faceleads-sql-dev.database.windows.net,1433;Initial Catalog=Faceleads;Persist Security Info=False;User ID=sqladmin;Password=Gi@ele0804;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "sqlServerName": { "value": "faceleads-sql-dev" },
+    "location": { "value": "brazilsouth" },
+    "administratorLogin": { "value": "sqladmin" },
+    "administratorLoginPassword": { "value": "Gi@ele0804" },
+    "databaseName": { "value": "Faceleads" },
+    "databaseSku": { "value": "Basic" },
+    "firewallStartIp": { "value": "" },
+    "firewallEndIp": { "value": "" },
+    "allowAzureServices": { "value": true }
+  }
+}
