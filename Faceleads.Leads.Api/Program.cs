@@ -106,6 +106,17 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// If the app is deployed under a virtual application path in Azure (or another reverse proxy),
+// you can set the environment variable or configuration key "PATH_BASE" to that prefix
+// (for example "/faceleads-api"). When set, the app will use that as PathBase so routing
+// matches incoming requests that include the prefix.
+var pathBase = builder.Configuration["PATH_BASE"];
+if (!string.IsNullOrEmpty(pathBase))
+{
+    app.UsePathBase(pathBase);
+    Console.WriteLine($"Using PATH_BASE='{pathBase}'");
+}
+
 app.UseHttpsRedirection();
 
 // Habilita CORS antes de autenticação/autorização
@@ -145,6 +156,26 @@ app.MapPost("/api/v1/consultores", async (
 // Simple unauthenticated health endpoints for deployment/routing checks
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/", () => Results.Ok("Faceleads Leads API is running"));
+
+// Fallback diagnostic endpoint: returns 404 with request path and registered endpoints list.
+// Useful to diagnose routing issues in environments where the app may be mounted under a path.
+app.MapFallback(async (HttpContext ctx, EndpointDataSource eds) =>
+{
+    var endpoints = eds.Endpoints
+        .Select(e => e.DisplayName ?? e.ToString())
+        .Where(s => !string.IsNullOrEmpty(s))
+        .ToArray();
+
+    var info = new
+    {
+        message = "No route matched the request",
+        path = ctx.Request.Path.Value,
+        method = ctx.Request.Method,
+        registeredEndpoints = endpoints
+    };
+
+    return Results.Json(info, statusCode: 404);
+});
 
 // Backward-compatible route: api versioned login
 app.MapPost("/api/v1/login", async (LoginRequest login, ITokenService tokenService) =>
