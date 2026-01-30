@@ -142,6 +142,10 @@ app.MapPost("/api/v1/consultores", async (
     return Results.Created($"/api/v1/consultores/{consultor.Id}", Result<object>.Ok(createdPayload));
 }).RequireAuthorization();
 
+// Simple unauthenticated health endpoints for deployment/routing checks
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/", () => Results.Ok("Faceleads Leads API is running"));
+
 // Backward-compatible route: api versioned login
 app.MapPost("/api/v1/login", async (LoginRequest login, ITokenService tokenService) =>
 {
