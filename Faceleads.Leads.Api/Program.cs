@@ -294,7 +294,7 @@ app.MapGet("/api/v1/consultores/{id:guid}", async (
 
     if (!result.Success)
     {
-        // Diferenciar ID inválido (400) de não encontrado (404) pelo código de erro
+        // Diferenciar Id inválido (400) de não encontrado (404) pelo código de erro
         return result.ErrorCode switch
         {
             "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(result.ErrorCode, result.ErrorMessage ?? string.Empty)),
