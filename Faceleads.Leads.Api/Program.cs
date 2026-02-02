@@ -45,7 +45,26 @@ builder.Services.AddScoped<ListConsultoresHandler>();
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var jwtIssuer = jwtSettings["Issuer"];
 var jwtAudience = jwtSettings["Audience"];
-var jwtKey = jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is not configured. Set Jwt:Key in configuration or environment.");
+var jwtKey = jwtSettings["Key"];
+
+// Provide hard-coded defaults for development if configuration is missing.
+// These are intended for dev only — prefer setting secure values in App Settings in production.
+if (string.IsNullOrWhiteSpace(jwtKey))
+{
+    jwtKey = "KcAxkN5Xn/lTyAqvY3wfgGSThIwpSIZED0XE95R3I1Q="; // dev fallback key
+    builder.Configuration["Jwt:Key"] = jwtKey;
+    Console.WriteLine("Warning: Jwt:Key not configured. Using hard-coded development key. Set Jwt__Key in App Settings for production.");
+}
+if (string.IsNullOrWhiteSpace(jwtIssuer))
+{
+    jwtIssuer = "Faceleads";
+    builder.Configuration["Jwt:Issuer"] = jwtIssuer;
+}
+if (string.IsNullOrWhiteSpace(jwtAudience))
+{
+    jwtAudience = "FaceleadsAudience";
+    builder.Configuration["Jwt:Audience"] = jwtAudience;
+}
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
