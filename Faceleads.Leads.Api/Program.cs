@@ -94,10 +94,41 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactDev", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+        // Allow origins can be configured via ALLOWED_ORIGINS env/config (semicolon separated).
+        var allowed = builder.Configuration["ALLOWED_ORIGINS"];
+        if (!string.IsNullOrWhiteSpace(allowed))
+        {
+            var origins = allowed.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            policy.WithOrigins(origins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        }
+        else
+        {
+            // Dynamically allow origins hosted on Azure platforms (and localhost) while keeping
+            // credentials allowed. This avoids using AllowAnyOrigin with credentials.
+            policy.SetIsOriginAllowed(origin =>
+            {
+                if (string.IsNullOrWhiteSpace(origin)) return false;
+                try
+                {
+                    var host = new Uri(origin).Host;
+                    if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || host.StartsWith("localhost", StringComparison.OrdinalIgnoreCase)) return true;
+                    if (host.EndsWith(".azurewebsites.net", StringComparison.OrdinalIgnoreCase)) return true;
+                    if (host.EndsWith(".azurestaticapps.net", StringComparison.OrdinalIgnoreCase)) return true;
+                    if (host.EndsWith(".web.core.windows.net", StringComparison.OrdinalIgnoreCase)) return true;
+                }
+                catch
+                {
+                    return false;
+                }
+                return false;
+            })
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+        }
     });
 });
 
@@ -138,6 +169,9 @@ if (!string.IsNullOrEmpty(pathBase))
 
 app.UseHttpsRedirection();
 
+// Ensure routing is enabled so CORS middleware can evaluate requests correctly.
+app.UseRouting();
+
 // Habilita CORS antes de autenticação/autorização
 app.UseCors("AllowReactDev");
 
@@ -172,10 +206,6 @@ app.MapPost("/api/v1/consultores", async (
     return Results.Created($"/api/v1/consultores/{consultor.Id}", Result<object>.Ok(createdPayload));
 }).RequireAuthorization();
 
-// Simple unauthenticated health endpoints for deployment/routing checks
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
-app.MapGet("/", () => Results.Ok("Faceleads Leads API is running"));
-
 // Fallback diagnostic endpoint: returns 404 with request path and registered endpoints list.
 // Useful to diagnose routing issues in environments where the app may be mounted under a path.
 app.MapFallback(async (HttpContext ctx, EndpointDataSource eds) =>
@@ -195,6 +225,12 @@ app.MapFallback(async (HttpContext ctx, EndpointDataSource eds) =>
 
     return Results.Json(info, statusCode: 404);
 });
+
+// Simple unauthenticated health endpoints for deployment/routing checks
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/", () => Results.Ok("Faceleads Leads API is running"));
+
+// Fallback diagnostic endpoint will be registered at the end of the routing pipeline.
 
 // Backward-compatible route: api versioned login
 app.MapPost("/api/v1/login", async (LoginRequest login, ITokenService tokenService) =>
