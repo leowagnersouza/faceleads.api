@@ -87,8 +87,8 @@ public sealed class LeadsDbContext : DbContext
                 .HasConversion<int>()
                 .IsRequired();
 
-            builder.Property(l => l.CriadoEmUtc)
-                .IsRequired();
+            // CreatedOn is tracked as a shadow audit property; make it required
+            builder.Property<DateTime>("CreatedOn").IsRequired();
 
             builder.Property(l => l.AtribuidoEmUtc);
 
@@ -141,8 +141,8 @@ public sealed class LeadsDbContext : DbContext
             builder.Property(c => c.Ativo)
                 .IsRequired();
 
-            builder.Property(c => c.CriadoEmUtc)
-                .IsRequired();
+            // Configure shadow audit property CreatedOn as required for Consultor
+            builder.Property<DateTime>("CreatedOn").IsRequired();
 
             // Soft delete column
             builder.Property(c => c.IsDeleted)
@@ -193,25 +193,25 @@ public sealed class LeadsDbContext : DbContext
             builder.Property(rt => rt.RevokedUtc);
         });
 
-        modelBuilder.Entity<Tenant>(builder =>
-        {
-            builder.ToTable("Tenants");
+            modelBuilder.Entity<Tenant>(builder =>
+            {
+                builder.ToTable("Tenants");
 
-            builder.HasKey(t => t.Id);
+                builder.HasKey(t => t.Id);
 
-            builder.Property(t => t.Nome)
-                .IsRequired()
-                .HasMaxLength(200);
+                builder.Property(t => t.Nome)
+                    .IsRequired()
+                    .HasMaxLength(200);
 
-            builder.Property(t => t.Descricao)
-                .HasMaxLength(1000);
+                builder.Property(t => t.Descricao)
+                    .HasMaxLength(1000);
 
-            builder.Property(t => t.Ativo)
-                .IsRequired()
-                .HasDefaultValue(true);
+                builder.Property(t => t.Ativo)
+                    .IsRequired()
+                    .HasDefaultValue(true);
 
-            builder.Property(t => t.CriadoEmUtc)
-                .IsRequired();
-        });
+                // Use shadow CreatedOn audit property for tenants and make it required
+                builder.Property<DateTime>("CreatedOn").IsRequired();
+            });
     }
 }

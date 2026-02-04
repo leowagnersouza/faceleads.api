@@ -3,15 +3,12 @@ namespace Faceleads.Leads.Domain;
 public sealed class Tenant
 {
     public Guid Id { get; private set; }
-    // Nome amigável para uso interno
     public string Nome { get; private set; } = string.Empty;
 
-    // Descrição opcional
     public string? Descricao { get; private set; }
 
     public bool Ativo { get; private set; }
 
-    public DateTime CriadoEmUtc { get; private set; }
 
     private Tenant()
     {
@@ -24,7 +21,6 @@ public sealed class Tenant
         Nome = nome;
         Descricao = descricao;
         Ativo = true;
-        CriadoEmUtc = DateTime.UtcNow;
     }
 
     public void Desativar()
@@ -41,4 +37,9 @@ public sealed class Tenant
     {
         Descricao = descricao;
     }
+}
+
+public interface ITenantRepository
+{
+    Task<Tenant?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 }

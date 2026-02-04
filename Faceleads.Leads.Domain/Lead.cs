@@ -33,7 +33,6 @@ public sealed class Lead
 
     public LeadStatus Status { get; private set; }
 
-    public DateTime CriadoEmUtc { get; private set; }
 
     public DateTime? AtribuidoEmUtc { get; private set; }
 
@@ -57,7 +56,7 @@ public sealed class Lead
         Telefone = telefone;
         Origem = origem;
         Status = LeadStatus.New;
-        CriadoEmUtc = DateTime.UtcNow;
+        // CreatedOn is handled by auditing shadow property
     }
 
     public void Assign()

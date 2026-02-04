@@ -15,6 +15,7 @@ using Faceleads.Leads.Api.Requests;
 using Faceleads.Leads.Api.Services;
 using Microsoft.OpenApi.Models;
 using System.Security.Cryptography;
+using Faceleads.Leads.Application.GetTenantName;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,11 +36,13 @@ builder.Services.AddScoped<ILeadRepository, LeadRepository>();
 builder.Services.AddScoped<IConsultorRepository, ConsultorRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<ITenantRepository, Faceleads.Leads.Infrastructure.TenantRepository>();
 
 // Casos de uso / handlers
 builder.Services.AddScoped<CreateConsultorHandler>();
 builder.Services.AddScoped<GetConsultorByIdHandler>();
 builder.Services.AddScoped<ListConsultoresHandler>();
+builder.Services.AddScoped<GetTenantNameHandler>();
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -92,43 +95,14 @@ builder.Services.AddAuthorization();
 // CORS - permitir o frontend React em desenvolvimento
 builder.Services.AddCors(options =>
 {
+    // Temporary: allow all origins to diagnose CORS issues. This will echo the request origin
+    // and allow credentials. Remove or restrict in production.
     options.AddPolicy("AllowReactDev", policy =>
     {
-        // Allow origins can be configured via ALLOWED_ORIGINS env/config (semicolon separated).
-        var allowed = builder.Configuration["ALLOWED_ORIGINS"];
-        if (!string.IsNullOrWhiteSpace(allowed))
-        {
-            var origins = allowed.Split(';', StringSplitOptions.RemoveEmptyEntries);
-            policy.WithOrigins(origins)
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
-        }
-        else
-        {
-            // Dynamically allow origins hosted on Azure platforms (and localhost) while keeping
-            // credentials allowed. This avoids using AllowAnyOrigin with credentials.
-            policy.SetIsOriginAllowed(origin =>
-            {
-                if (string.IsNullOrWhiteSpace(origin)) return false;
-                try
-                {
-                    var host = new Uri(origin).Host;
-                    if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || host.StartsWith("localhost", StringComparison.OrdinalIgnoreCase)) return true;
-                    if (host.EndsWith(".azurewebsites.net", StringComparison.OrdinalIgnoreCase)) return true;
-                    if (host.EndsWith(".azurestaticapps.net", StringComparison.OrdinalIgnoreCase)) return true;
-                    if (host.EndsWith(".web.core.windows.net", StringComparison.OrdinalIgnoreCase)) return true;
-                }
-                catch
-                {
-                    return false;
-                }
-                return false;
-            })
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
-        }
+        policy.SetIsOriginAllowed(_ => true)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
@@ -200,7 +174,8 @@ app.MapPost("/api/v1/consultores", async (
         consultor.Email,
         consultor.Telefone,
         consultor.Ativo,
-        consultor.CriadoEmUtc
+        // CreatedOn is stored as a shadow audit property; read it via EF.Property
+        CreatedOn = EF.Property<DateTime?>(consultor, "CreatedOn")
     };
 
     return Results.Created($"/api/v1/consultores/{consultor.Id}", Result<object>.Ok(createdPayload));
@@ -233,7 +208,7 @@ app.MapGet("/", () => Results.Ok("Faceleads Leads API is running"));
 // Fallback diagnostic endpoint will be registered at the end of the routing pipeline.
 
 // Backward-compatible route: api versioned login
-app.MapPost("/api/v1/login", async (LoginRequest login, ITokenService tokenService) =>
+app.MapPost("/api/v1/login", async (LoginRequest login, ITokenService tokenService, GetTenantNameHandler tenantHandler) =>
 {
     // Credenciais de teste hard-coded (não usar em produção)
     if (login.Username != "admin" || login.Password != "password")
@@ -262,17 +237,35 @@ app.MapPost("/api/v1/login", async (LoginRequest login, ITokenService tokenServi
         expires: DateTime.UtcNow.AddHours(1),
         signingCredentials: creds);
 
-    var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
-
+    // tokenString not used directly; tokenService issues tokens (including tenant claim)
     var issueResult = await tokenService.IssueTokensAsync(login.Username);
     if (!issueResult.Success)
     {
         return Results.BadRequest(Result.Fail(issueResult.ErrorCode ?? "ERROR", issueResult.ErrorMessage ?? string.Empty));
     }
-
     var (accessToken, refreshToken) = issueResult.Value!;
 
-    var payload = new { access_token = accessToken, refresh_token = refreshToken };
+    // Try to resolve tenant name from access token tenant_id claim
+    string? tenantName = null;
+    try
+    {
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(accessToken);
+        var tenantClaim = jwt.Claims.FirstOrDefault(c => c.Type == "tenant_id" || c.Type == ClaimTypes.NameIdentifier)?.Value;
+        if (!string.IsNullOrEmpty(tenantClaim) && Guid.TryParse(tenantClaim, out var tenantId))
+        {
+            var tenantResult = await tenantHandler.HandleAsync(new Faceleads.Leads.Application.GetTenantName.GetTenantNameQuery(tenantId)).ConfigureAwait(false);
+            if (tenantResult.Success)
+            {
+                tenantName = tenantResult.Value;
+            }
+        }
+    }
+    catch
+    {
+        // ignore errors resolving tenant name — not critical for login
+    }
+
+    var payload = new { access_token = accessToken, refresh_token = refreshToken, tenant_name = tenantName };
     return Results.Ok(Result<object>.Ok(payload));
 });
 
@@ -295,7 +288,7 @@ app.MapGet("/api/v1/consultores", async (
         c.Email,
         c.Telefone,
         c.Ativo,
-        c.CriadoEmUtc
+        CreatedOn = EF.Property<DateTime?>(c, "CreatedOn")
     }).ToList();
 
     return Results.Ok(Result<IEnumerable<object>>.Ok(dto.Cast<object>()));
@@ -402,7 +395,7 @@ app.MapGet("/api/v1/consultores/{id:guid}", async (
         consultor.Email,
         consultor.Telefone,
         consultor.Ativo,
-        consultor.CriadoEmUtc
+        CreatedOn = EF.Property<DateTime?>(consultor, "CreatedOn")
     };
 
     return Results.Ok(Result<object>.Ok(payload));

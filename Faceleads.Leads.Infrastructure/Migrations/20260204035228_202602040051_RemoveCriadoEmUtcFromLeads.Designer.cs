@@ -4,6 +4,7 @@ using Faceleads.Leads.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Faceleads.Leads.Infrastructure.Migrations
 {
     [DbContext(typeof(LeadsDbContext))]
-    partial class LeadsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260204035228_202602040051_RemoveCriadoEmUtcFromLeads")]
+    partial class _202602040051_RemoveCriadoEmUtcFromLeads
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -220,7 +223,10 @@ namespace Faceleads.Leads.Infrastructure.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime>("CreatedOn")
+                    b.Property<DateTime?>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CriadoEmUtc")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Descricao")

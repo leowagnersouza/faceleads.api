@@ -15,7 +15,6 @@ public sealed class Consultor
 
     public bool Ativo { get; private set; }
 
-    public DateTime CriadoEmUtc { get; private set; }
 
     // Soft delete flag
     public bool IsDeleted { get; private set; }
@@ -35,7 +34,7 @@ public sealed class Consultor
         Email = email;
         Telefone = telefone;
         Ativo = true;
-        CriadoEmUtc = DateTime.UtcNow;
+        // CreatedOn is tracked by the auditing shadow property
         IsDeleted = false;
     }
 
