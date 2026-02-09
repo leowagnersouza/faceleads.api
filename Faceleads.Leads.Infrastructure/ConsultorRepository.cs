@@ -12,6 +12,22 @@ public sealed class ConsultorRepository : IConsultorRepository
         _dbContext = dbContext;
     }
 
+    public async Task<bool> UpdateAsync(Guid id, string nomeCompleto, string email, string? telefone, CancellationToken cancellationToken = default)
+    {
+        var consultor = await _dbContext.Consultores
+            .FirstOrDefaultAsync(c => c.Id == id, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (consultor is null)
+        {
+            return false;
+        }
+
+        consultor.AtualizarContato(nomeCompleto, email, telefone);
+        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
     public async Task AddAsync(Consultor consultor, CancellationToken cancellationToken = default)
     {
         await _dbContext.Consultores.AddAsync(consultor, cancellationToken).ConfigureAwait(false);

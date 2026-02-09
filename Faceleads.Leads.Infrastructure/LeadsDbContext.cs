@@ -37,30 +37,8 @@ public sealed class LeadsDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Add shadow properties for auditing across all entities
-        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-        {
-            // Skip owned types
-            if (entityType.IsOwned()) continue;
-
-            // Add shadow properties if not already present
-            if (entityType.FindProperty("CreatedBy") == null)
-            {
-                modelBuilder.Entity(entityType.ClrType).Property<string?>("CreatedBy");
-            }
-            if (entityType.FindProperty("CreatedOn") == null)
-            {
-                modelBuilder.Entity(entityType.ClrType).Property<DateTime?>("CreatedOn");
-            }
-            if (entityType.FindProperty("ModifiedBy") == null)
-            {
-                modelBuilder.Entity(entityType.ClrType).Property<string?>("ModifiedBy");
-            }
-            if (entityType.FindProperty("ModifiedOn") == null)
-            {
-                modelBuilder.Entity(entityType.ClrType).Property<DateTime?>("ModifiedOn");
-            }
-        }
+        // Auditing properties are now CLR properties on the entities (CreatedOn, CreatedBy, etc.)
+        // No need to add shadow properties.
 
         modelBuilder.Entity<Lead>(builder =>
         {
@@ -87,8 +65,11 @@ public sealed class LeadsDbContext : DbContext
                 .HasConversion<int>()
                 .IsRequired();
 
-            // CreatedOn is tracked as a shadow audit property; make it required
-            builder.Property<DateTime>("CreatedOn").IsRequired();
+            // Use CLR auditing property
+            builder.Property(l => l.CreatedOn).IsRequired();
+            builder.Property(l => l.CreatedBy);
+            builder.Property(l => l.ModifiedOn);
+            builder.Property(l => l.ModifiedBy);
 
             builder.Property(l => l.AtribuidoEmUtc);
 
@@ -141,8 +122,12 @@ public sealed class LeadsDbContext : DbContext
             builder.Property(c => c.Ativo)
                 .IsRequired();
 
-            // Configure shadow audit property CreatedOn as required for Consultor
-            builder.Property<DateTime>("CreatedOn").IsRequired();
+            // Configure CLR audit properties for Consultor
+            // CreatedOn was made nullable by a later migration
+            builder.Property(c => c.CreatedOn);
+            builder.Property(c => c.CreatedBy);
+            builder.Property(c => c.ModifiedOn);
+            builder.Property(c => c.ModifiedBy);
 
             // Soft delete column
             builder.Property(c => c.IsDeleted)
@@ -168,6 +153,10 @@ public sealed class LeadsDbContext : DbContext
                 .IsRequired();
 
             builder.Property(lc => lc.EncerradoEmUtc);
+            builder.Property(lc => lc.CreatedOn);
+            builder.Property(lc => lc.CreatedBy);
+            builder.Property(lc => lc.ModifiedOn);
+            builder.Property(lc => lc.ModifiedBy);
         });
 
         modelBuilder.Entity<RefreshToken>(builder =>
@@ -191,6 +180,10 @@ public sealed class LeadsDbContext : DbContext
                 .IsRequired();
 
             builder.Property(rt => rt.RevokedUtc);
+            builder.Property(rt => rt.CreatedOn);
+            builder.Property(rt => rt.CreatedBy);
+            builder.Property(rt => rt.ModifiedOn);
+            builder.Property(rt => rt.ModifiedBy);
         });
 
             modelBuilder.Entity<Tenant>(builder =>
@@ -210,8 +203,11 @@ public sealed class LeadsDbContext : DbContext
                     .IsRequired()
                     .HasDefaultValue(true);
 
-                // Use shadow CreatedOn audit property for tenants and make it required
-                builder.Property<DateTime>("CreatedOn").IsRequired();
+                // Use CLR CreatedOn for tenants
+                builder.Property(t => t.CreatedOn).IsRequired();
+                builder.Property(t => t.CreatedBy);
+                builder.Property(t => t.ModifiedOn);
+                builder.Property(t => t.ModifiedBy);
             });
     }
 }

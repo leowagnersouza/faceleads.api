@@ -19,6 +19,15 @@ public sealed class Consultor
     // Soft delete flag
     public bool IsDeleted { get; private set; }
 
+    // Auditing properties (exposed as CLR properties so they can be read directly)
+    public DateTime? CreatedOn { get; private set; }
+
+    public string? CreatedBy { get; private set; }
+    
+    // Auditing - modification tracking
+    public DateTime? ModifiedOn { get; private set; }
+    public string? ModifiedBy { get; private set; }
+
     // Navegação somente leitura para manter o histórico de leads
     public IReadOnlyCollection<LeadConsultor> Leads { get; private set; } = new List<LeadConsultor>();
 
@@ -79,4 +88,6 @@ public interface IConsultorRepository
     Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken = default);
 
     Task<bool> SoftDeleteAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task<bool> UpdateAsync(Guid id, string nomeCompleto, string email, string? telefone, CancellationToken cancellationToken = default);
 }

@@ -9,10 +9,12 @@ namespace Faceleads.Leads.Infrastructure.Interceptors;
 public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
 {
     private readonly ICurrentUserService _currentUserService;
+    private readonly ICurrentTenantService? _currentTenantService;
 
-    public AuditingSaveChangesInterceptor(ICurrentUserService currentUserService)
+    public AuditingSaveChangesInterceptor(ICurrentUserService currentUserService, ICurrentTenantService? currentTenantService = null)
     {
         _currentUserService = currentUserService;
+        _currentTenantService = currentTenantService;
     }
 
     public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
@@ -30,6 +32,8 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
     private void UpdateAuditProperties(DbContext? context)
     {
         if (context == null) return;
+        // Ensure EF has detected any changes so we can observe Modified states
+        context.ChangeTracker.DetectChanges();
 
         var now = DateTime.UtcNow;
         var userId = _currentUserService.UserId ?? string.Empty;
@@ -40,43 +44,54 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
             {
                 // If entity has a TenantId property, set it from the current tenant service (if available)
                 var tenantProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "TenantId");
-                if (tenantProp != null && tenantProp.CurrentValue is null)
+                if (tenantProp != null)
                 {
-                    try
+                    // Treat Guid.Empty as not set for non-nullable TenantId columns
+                    var current = tenantProp.CurrentValue;
+                    var isEmptyGuid = current is Guid g && g == Guid.Empty;
+                    var isNull = current is null;
+                    if (isNull || isEmptyGuid)
                     {
-                        var tenantService = context as Microsoft.EntityFrameworkCore.Infrastructure.IInfrastructure<IServiceProvider>;
-                        var sp = tenantService?.Instance;
-                        var currentTenant = sp?.GetService(typeof(Faceleads.Leads.Application.Common.ICurrentTenantService)) as Faceleads.Leads.Application.Common.ICurrentTenantService;
-                        if (tenantService != null)
+                        try
                         {
-                            tenantProp.CurrentValue = currentTenant?.TenantId;
+                            var tenantId = _currentTenantService?.TenantId;
+                            if (tenantId is not null && tenantId != Guid.Empty)
+                            {
+                                tenantProp.CurrentValue = tenantId;
+                            }
                         }
-                    }
-                    catch
-                    {
-                        // ignore if tenant service not available at design-time or other contexts
+                        catch
+                        {
+                            // ignore if tenant service not available at design-time or other contexts
+                        }
                     }
                 }
 
-                if (entry.Property("CreatedOn") != null)
+                // If the CLR properties exist, set them directly
+                var createdOnProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "CreatedOn");
+                if (createdOnProp != null)
                 {
-                    entry.Property("CreatedOn").CurrentValue = now;
+                    createdOnProp.CurrentValue = now;
                 }
-                if (entry.Property("CreatedBy") != null)
+                var createdByProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "CreatedBy");
+                if (createdByProp != null)
                 {
-                    entry.Property("CreatedBy").CurrentValue = userId;
+                    createdByProp.CurrentValue = userId;
                 }
             }
 
-            if (entry.State == EntityState.Modified)
+            // Consider entities modified either by state or by any modified property
+            if (entry.State == EntityState.Modified || entry.Properties.Any(p => p.IsModified))
             {
-                if (entry.Property("ModifiedOn") != null)
+                var modifiedOnProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "ModifiedOn");
+                if (modifiedOnProp != null)
                 {
-                    entry.Property("ModifiedOn").CurrentValue = now;
+                    modifiedOnProp.CurrentValue = now;
                 }
-                if (entry.Property("ModifiedBy") != null)
+                var modifiedByProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "ModifiedBy");
+                if (modifiedByProp != null)
                 {
-                    entry.Property("ModifiedBy").CurrentValue = userId;
+                    modifiedByProp.CurrentValue = userId;
                 }
             }
         }

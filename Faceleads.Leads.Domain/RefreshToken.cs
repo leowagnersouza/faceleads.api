@@ -17,6 +17,12 @@ public sealed class RefreshToken
 
     public DateTime? RevokedUtc { get; private set; }
 
+    // Auditing properties
+    public DateTime? CreatedOn { get; private set; }
+    public string? CreatedBy { get; private set; }
+    public DateTime? ModifiedOn { get; private set; }
+    public string? ModifiedBy { get; private set; }
+
     private RefreshToken()
     {
         // EF Core

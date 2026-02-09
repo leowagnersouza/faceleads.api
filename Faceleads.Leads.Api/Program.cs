@@ -5,7 +5,6 @@ using Faceleads.Leads.Application.ListConsultores;
 using Faceleads.Leads.Domain;
 using Faceleads.Leads.Infrastructure;
 using Microsoft.EntityFrameworkCore;
-using System.Linq;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -14,14 +13,21 @@ using System.IdentityModel.Tokens.Jwt;
 using Faceleads.Leads.Api.Requests;
 using Faceleads.Leads.Api.Services;
 using Microsoft.OpenApi.Models;
-using System.Security.Cryptography;
 using Faceleads.Leads.Application.GetTenantName;
+using Faceleads.Leads.Application.UpdateConsultor;
+using Faceleads.Leads.Application.DeleteConsultor;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// Ensure HttpContextAccessor and tenant service are available early so the
+// auditing interceptor can resolve the current tenant when AddDbContext runs.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Faceleads.Leads.Application.Common.ICurrentTenantService, Faceleads.Leads.Api.Services.CurrentTenantService>();
+builder.Services.AddScoped<Faceleads.Leads.Infrastructure.Interceptors.AuditingSaveChangesInterceptor>();
 
 // DbContext configurado para SQL Server. A connection string deve ser configurada em appsettings.
 builder.Services.AddDbContext<LeadsDbContext>((serviceProvider, options) =>
@@ -43,6 +49,10 @@ builder.Services.AddScoped<CreateConsultorHandler>();
 builder.Services.AddScoped<GetConsultorByIdHandler>();
 builder.Services.AddScoped<ListConsultoresHandler>();
 builder.Services.AddScoped<GetTenantNameHandler>();
+builder.Services.AddScoped<UpdateConsultorHandler>();
+builder.Services.AddScoped<DeleteConsultorHandler>();
+builder.Services.AddScoped<Faceleads.Leads.Application.ActivateConsultor.ActivateConsultorHandler>();
+builder.Services.AddScoped<Faceleads.Leads.Application.DeactivateConsultor.DeactivateConsultorHandler>();
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -174,11 +184,41 @@ app.MapPost("/api/v1/consultores", async (
         consultor.Email,
         consultor.Telefone,
         consultor.Ativo,
-        // CreatedOn is stored as a shadow audit property; read it via EF.Property
-        CreatedOn = EF.Property<DateTime?>(consultor, "CreatedOn")
+        consultor.CreatedOn,
+        consultor.CreatedBy
     };
 
     return Results.Created($"/api/v1/consultores/{consultor.Id}", Result<object>.Ok(createdPayload));
+}).RequireAuthorization();
+
+// Endpoint para atualizar o consultor
+app.MapPut("/api/v1/consultores/{id:guid}", async (
+    Guid id,
+    UpdateConsultorRequest request,
+    UpdateConsultorHandler handler,
+    CancellationToken cancellationToken) =>
+{
+    var cmd = new UpdateConsultorCommand
+    {
+        Id = id,
+        NomeCompleto = request.NomeCompleto,
+        Email = request.Email,
+        Telefone = request.Telefone
+    };
+
+    var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
+
+    if (!result.Success)
+    {
+        return result.ErrorCode switch
+        {
+            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
+            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
+            _ => Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty))
+        };
+    }
+
+    return Results.Ok(Result.Ok());
 }).RequireAuthorization();
 
 // Fallback diagnostic endpoint: returns 404 with request path and registered endpoints list.
@@ -288,49 +328,78 @@ app.MapGet("/api/v1/consultores", async (
         c.Email,
         c.Telefone,
         c.Ativo,
-        CreatedOn = EF.Property<DateTime?>(c, "CreatedOn")
+        CreatedOn = c.CreatedOn,
+        CreatedBy = c.CreatedBy
     }).ToList();
 
     return Results.Ok(Result<IEnumerable<object>>.Ok(dto.Cast<object>()));
 }).RequireAuthorization();
 
 // Endpoint para ativar consultor
-app.MapPatch("/consultores/{id:guid}/ativar", async (
+app.MapPatch("/api/v1/consultores/{id:guid}/ativar", async (
     Guid id,
-    IConsultorRepository consultorRepository,
+    Faceleads.Leads.Application.ActivateConsultor.ActivateConsultorHandler handler,
     CancellationToken cancellationToken) =>
 {
-    var success = await consultorRepository.ActivateAsync(id, cancellationToken).ConfigureAwait(false);
+    var cmd = new Faceleads.Leads.Application.ActivateConsultor.ActivateConsultorCommand { Id = id };
+    var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
 
-    return success
-        ? Results.NoContent()
-        : Results.NotFound(new { Error = "CONSULTOR_NAO_ENCONTRADO" });
+    if (!result.Success)
+    {
+        return result.ErrorCode switch
+        {
+            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
+            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
+            _ => Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty))
+        };
+    }
+
+    return Results.Ok(Result.Ok());
 }).RequireAuthorization();
 
 // Endpoint para desativar consultor
-app.MapPatch("/consultores/{id:guid}/desativar", async (
+app.MapPatch("/api/v1/consultores/{id:guid}/desativar", async (
     Guid id,
-    IConsultorRepository consultorRepository,
+    Faceleads.Leads.Application.DeactivateConsultor.DeactivateConsultorHandler handler,
     CancellationToken cancellationToken) =>
 {
-    var success = await consultorRepository.DeactivateAsync(id, cancellationToken).ConfigureAwait(false);
+    var cmd = new Faceleads.Leads.Application.DeactivateConsultor.DeactivateConsultorCommand { Id = id };
+    var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
 
-    return success
-        ? Results.NoContent()
-        : Results.NotFound(new { Error = "CONSULTOR_NAO_ENCONTRADO" });
+    if (!result.Success)
+    {
+        return result.ErrorCode switch
+        {
+            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
+            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
+            _ => Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty))
+        };
+    }
+
+    return Results.Ok(Result.Ok());
 }).RequireAuthorization();
 
 // Endpoint para soft-delete (exclusão lógica)
-app.MapDelete("/consultores/{id:guid}", async (
+app.MapDelete("/api/v1/consultores/{id:guid}", async (
     Guid id,
-    IConsultorRepository consultorRepository,
+    DeleteConsultorHandler handler,
     CancellationToken cancellationToken) =>
 {
-    var success = await consultorRepository.SoftDeleteAsync(id, cancellationToken).ConfigureAwait(false);
+    var cmd = new DeleteConsultorCommand { Id = id };
 
-    return success
-        ? Results.NoContent()
-        : Results.NotFound(new { Error = "CONSULTOR_NAO_ENCONTRADO" });
+    var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
+
+    if (!result.Success)
+    {
+        return result.ErrorCode switch
+        {
+            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
+            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
+            _ => Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty))
+        };
+    }
+
+    return Results.Ok(Result.Ok());
 }).RequireAuthorization();
 
 // Endpoint para renovar tokens usando refresh token
@@ -395,7 +464,8 @@ app.MapGet("/api/v1/consultores/{id:guid}", async (
         consultor.Email,
         consultor.Telefone,
         consultor.Ativo,
-        CreatedOn = EF.Property<DateTime?>(consultor, "CreatedOn")
+        CreatedOn = consultor.CreatedOn,
+        CreatedBy = consultor.CreatedBy
     };
 
     return Results.Ok(Result<object>.Ok(payload));

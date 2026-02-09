@@ -59,6 +59,15 @@ public sealed class Lead
         // CreatedOn is handled by auditing shadow property
     }
 
+    // Auditing properties exposed as CLR so they can be returned in responses
+    public DateTime? CreatedOn { get; private set; }
+
+    public string? CreatedBy { get; private set; }
+    
+    // Auditing modification
+    public DateTime? ModifiedOn { get; private set; }
+    public string? ModifiedBy { get; private set; }
+
     public void Assign()
     {
         if (Status != LeadStatus.New)
