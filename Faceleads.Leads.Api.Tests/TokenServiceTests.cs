@@ -31,7 +31,9 @@ public class TokenServiceTests
 
         var service = new TokenService(configuration, mockRepo.Object);
 
-        var result = await service.IssueTokensAsync("alice");
+        var usuario = new Usuario(Guid.Empty, "alice", "alice@example.com", "fakehash");
+
+        var result = await service.IssueTokensAsync(usuario);
 
         Assert.True(result.Success);
         Assert.NotNull(result.Value);

@@ -1,0 +1,7 @@
+Repository implementations:
+- UsuarioRepository
+- RoleRepository
+- PermissaoRepository
+- RolePermissaoRepository
+
+Register these in DI (Program.cs) as scoped implementations of their interfaces.

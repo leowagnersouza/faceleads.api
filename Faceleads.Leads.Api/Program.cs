@@ -1,5 +1,7 @@
 using Faceleads.Leads.Application.Common;
 using Faceleads.Leads.Application.CreateConsultor;
+using Faceleads.Leads.Application.Repositories;
+using Faceleads.Leads.Infrastructure.Repositories;
 using Faceleads.Leads.Application.GetConsultorById;
 using Faceleads.Leads.Application.ListConsultores;
 using Faceleads.Leads.Domain;
@@ -9,6 +11,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Identity;
 using System.IdentityModel.Tokens.Jwt;
 using Faceleads.Leads.Api.Requests;
 using Faceleads.Leads.Api.Services;
@@ -16,6 +19,11 @@ using Microsoft.OpenApi.Models;
 using Faceleads.Leads.Application.GetTenantName;
 using Faceleads.Leads.Application.UpdateConsultor;
 using Faceleads.Leads.Application.DeleteConsultor;
+using Faceleads.Leads.Application.DeactivateConsultor;
+using Faceleads.Leads.Application.ActivateConsultor;
+using Faceleads.Leads.Infrastructure.Interceptors;
+using Microsoft.AspNetCore.Authorization;
+using Faceleads.Leads.Api.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,23 +34,29 @@ builder.Services.AddOpenApi();
 // Ensure HttpContextAccessor and tenant service are available early so the
 // auditing interceptor can resolve the current tenant when AddDbContext runs.
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<Faceleads.Leads.Application.Common.ICurrentTenantService, Faceleads.Leads.Api.Services.CurrentTenantService>();
-builder.Services.AddScoped<Faceleads.Leads.Infrastructure.Interceptors.AuditingSaveChangesInterceptor>();
+builder.Services.AddScoped<ICurrentTenantService, CurrentTenantService>();
+builder.Services.AddScoped<AuditingSaveChangesInterceptor>();
 
 // DbContext configurado para SQL Server. A connection string deve ser configurada em appsettings.
 builder.Services.AddDbContext<LeadsDbContext>((serviceProvider, options) =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("LeadsDatabase"));
     // Add interceptor resolved from the DI container
-    options.AddInterceptors(serviceProvider.GetRequiredService<Faceleads.Leads.Infrastructure.Interceptors.AuditingSaveChangesInterceptor>());
+    options.AddInterceptors(serviceProvider.GetRequiredService<AuditingSaveChangesInterceptor>());
 });
 
 // Repositórios
 builder.Services.AddScoped<ILeadRepository, LeadRepository>();
 builder.Services.AddScoped<IConsultorRepository, ConsultorRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+builder.Services.AddScoped<IRoleRepository, RoleRepository>();
+builder.Services.AddScoped<IPermissaoRepository, PermissaoRepository>();
+builder.Services.AddScoped<IRolePermissaoRepository, RolePermissaoRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddScoped<ITenantRepository, Faceleads.Leads.Infrastructure.TenantRepository>();
+builder.Services.AddScoped<ITenantRepository, TenantRepository>();
+// Identity helpers
+builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 
 // Casos de uso / handlers
 builder.Services.AddScoped<CreateConsultorHandler>();
@@ -51,8 +65,8 @@ builder.Services.AddScoped<ListConsultoresHandler>();
 builder.Services.AddScoped<GetTenantNameHandler>();
 builder.Services.AddScoped<UpdateConsultorHandler>();
 builder.Services.AddScoped<DeleteConsultorHandler>();
-builder.Services.AddScoped<Faceleads.Leads.Application.ActivateConsultor.ActivateConsultorHandler>();
-builder.Services.AddScoped<Faceleads.Leads.Application.DeactivateConsultor.DeactivateConsultorHandler>();
+builder.Services.AddScoped<ActivateConsultorHandler>();
+builder.Services.AddScoped<DeactivateConsultorHandler>();
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -97,10 +111,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 // Register auditing support
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<Faceleads.Leads.Application.Common.ICurrentUserService, Faceleads.Leads.Api.Services.CurrentUserService>();
-builder.Services.AddScoped<Faceleads.Leads.Infrastructure.Interceptors.AuditingSaveChangesInterceptor>();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<AuditingSaveChangesInterceptor>();
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("consultor.create", p => p.Requirements.Add(new PermissionRequirement("consultor.create")));
+    options.AddPolicy("consultor.delete", p => p.Requirements.Add(new PermissionRequirement("consultor.delete")));
+    options.AddPolicy("consultor.update", p => p.Requirements.Add(new PermissionRequirement("consultor.update")));
+    options.AddPolicy("consultor.list", p => p.Requirements.Add(new PermissionRequirement("consultor.list")));
+});
+
+// Register permission handler and cache
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 
 // CORS - permitir o frontend React em desenvolvimento
 builder.Services.AddCors(options =>
@@ -189,7 +213,7 @@ app.MapPost("/api/v1/consultores", async (
     };
 
     return Results.Created($"/api/v1/consultores/{consultor.Id}", Result<object>.Ok(createdPayload));
-}).RequireAuthorization();
+}).RequireAuthorization("consultor.create");
 
 // Endpoint para atualizar o consultor
 app.MapPut("/api/v1/consultores/{id:guid}", async (
@@ -219,7 +243,7 @@ app.MapPut("/api/v1/consultores/{id:guid}", async (
     }
 
     return Results.Ok(Result.Ok());
-}).RequireAuthorization();
+}).RequireAuthorization("consultor.update");
 
 // Fallback diagnostic endpoint: returns 404 with request path and registered endpoints list.
 // Useful to diagnose routing issues in environments where the app may be mounted under a path.
@@ -248,64 +272,49 @@ app.MapGet("/", () => Results.Ok("Faceleads Leads API is running"));
 // Fallback diagnostic endpoint will be registered at the end of the routing pipeline.
 
 // Backward-compatible route: api versioned login
-app.MapPost("/api/v1/login", async (LoginRequest login, ITokenService tokenService, GetTenantNameHandler tenantHandler) =>
+app.MapPost("/api/v1/login", async (
+    LoginRequest login,
+    ITokenService tokenService,
+    IUsuarioRepository usuarioRepo,
+    IPasswordHasher<Usuario> passwordHasher,
+    ICurrentTenantService currentTenantService,
+    GetTenantNameHandler tenantHandler) =>
 {
-    // Credenciais de teste hard-coded (não usar em produção)
-    if (login.Username != "admin" || login.Password != "password")
+    // Lookup user by normalized username within current tenant
+    var tenantId = currentTenantService.TenantId;
+    var normalized = login.Username.ToUpperInvariant();
+    var usuario = await usuarioRepo.GetWithRolesByNormalizedUsernameAsync(tenantId, normalized);
+    if (usuario is null)
     {
         return Results.Json(Result.Fail("AUTH_INVALID", "Credenciais inválidas."), statusCode: 401);
     }
 
-    var jwtSettings = builder.Configuration.GetSection("Jwt");
-    var jwtIssuer = jwtSettings["Issuer"]!;
-    var jwtAudience = jwtSettings["Audience"]!;
-    var jwtKey = jwtSettings["Key"]!;
-
-    var claims = new[]
+    var verify = passwordHasher.VerifyHashedPassword(usuario, usuario.SenhaHash, login.Password);
+    if (verify == PasswordVerificationResult.Failed)
     {
-        new Claim(ClaimTypes.Name, login.Username),
-        new Claim(ClaimTypes.Role, "Admin")
-    };
+        return Results.Json(Result.Fail("AUTH_INVALID", "Credenciais inválidas."), statusCode: 401);
+    }
 
-    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
-    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-    var token = new JwtSecurityToken(
-        issuer: jwtIssuer,
-        audience: jwtAudience,
-        claims: claims,
-        expires: DateTime.UtcNow.AddHours(1),
-        signingCredentials: creds);
-
-    // tokenString not used directly; tokenService issues tokens (including tenant claim)
-    var issueResult = await tokenService.IssueTokensAsync(login.Username);
+    var issueResult = await tokenService.IssueTokensAsync(usuario);
     if (!issueResult.Success)
     {
         return Results.BadRequest(Result.Fail(issueResult.ErrorCode ?? "ERROR", issueResult.ErrorMessage ?? string.Empty));
     }
+
     var (accessToken, refreshToken) = issueResult.Value!;
 
-    // Try to resolve tenant name from access token tenant_id claim
+    // Resolve tenant name directly from the user record (avoid relying on token parsing)
     string? tenantName = null;
-    try
+    if (usuario?.TenantId != Guid.Empty)
     {
-        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(accessToken);
-        var tenantClaim = jwt.Claims.FirstOrDefault(c => c.Type == "tenant_id" || c.Type == ClaimTypes.NameIdentifier)?.Value;
-        if (!string.IsNullOrEmpty(tenantClaim) && Guid.TryParse(tenantClaim, out var tenantId))
+        var tenantResult = await tenantHandler.HandleAsync(new Faceleads.Leads.Application.GetTenantName.GetTenantNameQuery(usuario.TenantId)).ConfigureAwait(false);
+        if (tenantResult.Success)
         {
-            var tenantResult = await tenantHandler.HandleAsync(new Faceleads.Leads.Application.GetTenantName.GetTenantNameQuery(tenantId)).ConfigureAwait(false);
-            if (tenantResult.Success)
-            {
-                tenantName = tenantResult.Value;
-            }
+            tenantName = tenantResult.Value;
         }
     }
-    catch
-    {
-        // ignore errors resolving tenant name — not critical for login
-    }
 
-    var payload = new { access_token = accessToken, refresh_token = refreshToken, tenant_name = tenantName };
+    var payload = new { access_token = accessToken, refresh_token = refreshToken, tenant_name = tenantName, username = usuario?.NomeUsuario };
     return Results.Ok(Result<object>.Ok(payload));
 });
 
@@ -333,7 +342,7 @@ app.MapGet("/api/v1/consultores", async (
     }).ToList();
 
     return Results.Ok(Result<IEnumerable<object>>.Ok(dto.Cast<object>()));
-}).RequireAuthorization();
+}).RequireAuthorization("consultor.list");
 
 // Endpoint para ativar consultor
 app.MapPatch("/api/v1/consultores/{id:guid}/ativar", async (
@@ -355,7 +364,7 @@ app.MapPatch("/api/v1/consultores/{id:guid}/ativar", async (
     }
 
     return Results.Ok(Result.Ok());
-}).RequireAuthorization();
+}).RequireAuthorization("consultor.update");
 
 // Endpoint para desativar consultor
 app.MapPatch("/api/v1/consultores/{id:guid}/desativar", async (
@@ -377,7 +386,7 @@ app.MapPatch("/api/v1/consultores/{id:guid}/desativar", async (
     }
 
     return Results.Ok(Result.Ok());
-}).RequireAuthorization();
+}).RequireAuthorization("consultor.update");
 
 // Endpoint para soft-delete (exclusão lógica)
 app.MapDelete("/api/v1/consultores/{id:guid}", async (
@@ -400,7 +409,7 @@ app.MapDelete("/api/v1/consultores/{id:guid}", async (
     }
 
     return Results.Ok(Result.Ok());
-}).RequireAuthorization();
+}).RequireAuthorization("consultor.delete");
 
 // Endpoint para renovar tokens usando refresh token
 app.MapPost("/api/v1/refresh", async (RefreshRequest request, ITokenService tokenService) =>

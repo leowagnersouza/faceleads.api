@@ -20,20 +20,36 @@ public sealed class TokenService : ITokenService
         _refreshRepo = refreshRepo;
     }
 
-    public async Task<Result<(string accessToken, string refreshToken)>> IssueTokensAsync(string username, CancellationToken cancellationToken = default)
+    public async Task<Result<(string accessToken, string refreshToken)>> IssueTokensAsync(Usuario usuario, CancellationToken cancellationToken = default)
     {
         var jwtSettings = _configuration.GetSection("Jwt");
         var jwtIssuer = jwtSettings["Issuer"]!;
         var jwtAudience = jwtSettings["Audience"]!;
         var jwtKey = jwtSettings["Key"]!;
 
-        // Include tenant_id claim for now with default tenant (dev). Replace with user lookup when available.
-        var defaultTenantId = "e7a1f3c2-9b4d-4f6a-8c12-3b9d2f0a6e5f";
-        var claims = new[]
+        // Build claims from the Usuario entity
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.Name, username),
-            new Claim("tenant_id", defaultTenantId)
+            new Claim(ClaimTypes.Name, usuario.NomeUsuario),
+            new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString())
         };
+
+        if (usuario.TenantId != Guid.Empty)
+        {
+            claims.Add(new Claim("tenant_id", usuario.TenantId.ToString()));
+        }
+
+        // Add role claims if roles are loaded on the aggregate
+        if (usuario.Roles is not null)
+        {
+            foreach (var ur in usuario.Roles)
+            {
+                if (ur.Role is not null && !string.IsNullOrEmpty(ur.Role.Nome))
+                {
+                    claims.Add(new Claim(ClaimTypes.Role, ur.Role.Nome));
+                }
+            }
+        }
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -48,7 +64,7 @@ public sealed class TokenService : ITokenService
         var accessToken = new JwtSecurityTokenHandler().WriteToken(token);
 
         var refreshTokenString = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
-        var refreshToken = new RefreshToken(refreshTokenString, username, DateTime.UtcNow.AddDays(30));
+        var refreshToken = new RefreshToken(refreshTokenString, usuario.NomeUsuario, DateTime.UtcNow.AddDays(30));
         await _refreshRepo.AddAsync(refreshToken, cancellationToken).ConfigureAwait(false);
 
         return Result<(string, string)>.Ok((accessToken, refreshTokenString));

@@ -29,7 +29,13 @@ public sealed class LeadsDbContext : DbContext
 
     public DbSet<Consultor> Consultores => Set<Consultor>();
 
-    public DbSet<Faceleads.Leads.Domain.RefreshToken> RefreshTokens => Set<Faceleads.Leads.Domain.RefreshToken>();
+    // Identity-like sets
+    public DbSet<Usuario> Usuarios => Set<Usuario>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<Permissao> Permissoes => Set<Permissao>();
+    public DbSet<UsuarioRole> UsuariosRoles => Set<UsuarioRole>();
+    public DbSet<RolePermissao> RolesPermissoes => Set<RolePermissao>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     public DbSet<LeadConsultor> LeadsConsultores => Set<LeadConsultor>();
     
@@ -141,6 +147,57 @@ public sealed class LeadsDbContext : DbContext
             builder.HasMany(c => c.Leads)
                 .WithOne(lc => lc.Consultor)
                 .HasForeignKey(lc => lc.ConsultorId);
+        });
+
+        // Identity/authorization mappings
+        modelBuilder.Entity<Faceleads.Leads.Domain.Usuario>(builder =>
+        {
+            builder.ToTable("Usuarios");
+            builder.HasKey(u => u.Id);
+            builder.Property(u => u.NomeUsuario).IsRequired().HasMaxLength(200);
+            builder.Property(u => u.NormalizedNomeUsuario).IsRequired().HasMaxLength(200);
+            builder.Property(u => u.Email).IsRequired().HasMaxLength(200);
+            builder.Property(u => u.NormalizedEmail).IsRequired().HasMaxLength(200);
+            builder.Property(u => u.SenhaHash).IsRequired();
+            builder.Property(u => u.TenantId).IsRequired();
+            builder.Property(u => u.ConsultorId);
+            builder.HasIndex("TenantId", "NormalizedEmail").IsUnique();
+            builder.HasIndex("TenantId", "NormalizedNomeUsuario").IsUnique();
+        });
+
+        modelBuilder.Entity<Faceleads.Leads.Domain.Role>(builder =>
+        {
+            builder.ToTable("Roles");
+            builder.HasKey(r => r.Id);
+            builder.Property(r => r.Nome).IsRequired().HasMaxLength(200);
+            builder.Property(r => r.NormalizedNome).IsRequired().HasMaxLength(200);
+            builder.Property(r => r.TenantId);
+            builder.HasIndex("TenantId", "NormalizedNome").IsUnique();
+        });
+
+        modelBuilder.Entity<Faceleads.Leads.Domain.Permissao>(builder =>
+        {
+            builder.ToTable("Permissoes");
+            builder.HasKey(p => p.Id);
+            builder.Property(p => p.Nome).IsRequired().HasMaxLength(200);
+            builder.Property(p => p.NormalizedNome).IsRequired().HasMaxLength(200);
+            builder.HasIndex(p => p.Nome).IsUnique();
+        });
+
+        modelBuilder.Entity<Faceleads.Leads.Domain.UsuarioRole>(builder =>
+        {
+            builder.ToTable("UsuariosRoles");
+            builder.HasKey(ur => new { ur.UsuarioId, ur.RoleId });
+            builder.HasOne(ur => ur.Usuario).WithMany(u => u.Roles!).HasForeignKey(ur => ur.UsuarioId);
+            builder.HasOne(ur => ur.Role).WithMany(r => r.Usuarios!).HasForeignKey(ur => ur.RoleId);
+        });
+
+        modelBuilder.Entity<Faceleads.Leads.Domain.RolePermissao>(builder =>
+        {
+            builder.ToTable("RolesPermissoes");
+            builder.HasKey(rp => new { rp.RoleId, rp.PermissaoId });
+            builder.HasOne(rp => rp.Role).WithMany(r => r.Permissoes!).HasForeignKey(rp => rp.RoleId);
+            builder.HasOne(rp => rp.Permissao).WithMany(p => p.Roles!).HasForeignKey(rp => rp.PermissaoId);
         });
 
         modelBuilder.Entity<LeadConsultor>(builder =>

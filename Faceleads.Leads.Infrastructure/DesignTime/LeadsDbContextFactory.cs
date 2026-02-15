@@ -22,7 +22,7 @@ namespace Faceleads.Leads.Infrastructure
             if (string.IsNullOrWhiteSpace(connectionString))
             {
                 // Fallback to a sensible local default (update password if necessary)
-                connectionString = "Server=localhost,1433;Database=Faceleads;User Id=sa;Password=Gi@ele0804;TrustServerCertificate=True;";
+                connectionString = "Server=tcp:faceleads-sql-dev.database.windows.net,1433;Initial Catalog=Faceleads;Persist Security Info=False;User ID=sqladmin;Password=Gi@ele0804;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
             }
 
             var optionsBuilder = new DbContextOptionsBuilder<LeadsDbContext>();
