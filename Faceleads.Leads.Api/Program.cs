@@ -10,9 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
-using System.IdentityModel.Tokens.Jwt;
 using Faceleads.Leads.Api.Requests;
 using Faceleads.Leads.Api.Services;
 using Microsoft.OpenApi.Models;
@@ -24,6 +22,7 @@ using Faceleads.Leads.Application.ActivateConsultor;
 using Faceleads.Leads.Infrastructure.Interceptors;
 using Microsoft.AspNetCore.Authorization;
 using Faceleads.Leads.Api.Authorization;
+using Faceleads.Leads.Application.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -55,8 +54,10 @@ builder.Services.AddScoped<IPermissaoRepository, PermissaoRepository>();
 builder.Services.AddScoped<IRolePermissaoRepository, RolePermissaoRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ITenantRepository, TenantRepository>();
-// Identity helpers
-builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
+// Identity helpers - use ASP.NET Identity hasher adapter for compatibility with existing hashes
+builder.Services.AddScoped<Faceleads.Leads.Application.Services.IPasswordHasher<Usuario>, Faceleads.Leads.Api.Adapters.PasswordHasherAdapter<Usuario>>();
+// Also register open-generic adapter for other types if needed
+builder.Services.AddScoped(typeof(Faceleads.Leads.Application.Services.IPasswordHasher<>), typeof(Faceleads.Leads.Api.Adapters.PasswordHasherAdapter<>));
 
 // Casos de uso / handlers
 builder.Services.AddScoped<CreateConsultorHandler>();
@@ -67,6 +68,8 @@ builder.Services.AddScoped<UpdateConsultorHandler>();
 builder.Services.AddScoped<DeleteConsultorHandler>();
 builder.Services.AddScoped<ActivateConsultorHandler>();
 builder.Services.AddScoped<DeactivateConsultorHandler>();
+// Auth handlers
+builder.Services.AddScoped<Faceleads.Leads.Application.Auth.LoginHandler>();
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -125,6 +128,9 @@ builder.Services.AddAuthorization(options =>
 // Register permission handler and cache
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
+// Register adapter to satisfy application ITokenService without making Application depend on Api project
+builder.Services.AddScoped<Faceleads.Leads.Application.Services.ITokenService, Faceleads.Leads.Api.Adapters.TokenServiceAdapter>();
+// CurrentTenantService already registered above (implements application interface)
 
 // CORS - permitir o frontend React em desenvolvimento
 builder.Services.AddCors(options =>
@@ -274,47 +280,18 @@ app.MapGet("/", () => Results.Ok("Faceleads Leads API is running"));
 // Backward-compatible route: api versioned login
 app.MapPost("/api/v1/login", async (
     LoginRequest login,
-    ITokenService tokenService,
-    IUsuarioRepository usuarioRepo,
-    IPasswordHasher<Usuario> passwordHasher,
-    ICurrentTenantService currentTenantService,
-    GetTenantNameHandler tenantHandler) =>
+    LoginHandler handler,
+    CancellationToken cancellationToken) =>
 {
-    // Lookup user by normalized username within current tenant
-    var tenantId = currentTenantService.TenantId;
-    var normalized = login.Username.ToUpperInvariant();
-    var usuario = await usuarioRepo.GetWithRolesByNormalizedUsernameAsync(tenantId, normalized);
-    if (usuario is null)
+    var cmd = new LoginCommand { Username = login.Username, Password = login.Password };
+    var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
+    if (!result.Success)
     {
-        return Results.Json(Result.Fail("AUTH_INVALID", "Credenciais inválidas."), statusCode: 401);
+        return Results.Json(Result.Fail(result.ErrorCode ?? "AUTH_INVALID", result.ErrorMessage ?? "Credenciais inválidas."), statusCode: 401);
     }
 
-    var verify = passwordHasher.VerifyHashedPassword(usuario, usuario.SenhaHash, login.Password);
-    if (verify == PasswordVerificationResult.Failed)
-    {
-        return Results.Json(Result.Fail("AUTH_INVALID", "Credenciais inválidas."), statusCode: 401);
-    }
-
-    var issueResult = await tokenService.IssueTokensAsync(usuario);
-    if (!issueResult.Success)
-    {
-        return Results.BadRequest(Result.Fail(issueResult.ErrorCode ?? "ERROR", issueResult.ErrorMessage ?? string.Empty));
-    }
-
-    var (accessToken, refreshToken) = issueResult.Value!;
-
-    // Resolve tenant name directly from the user record (avoid relying on token parsing)
-    string? tenantName = null;
-    if (usuario?.TenantId != Guid.Empty)
-    {
-        var tenantResult = await tenantHandler.HandleAsync(new Faceleads.Leads.Application.GetTenantName.GetTenantNameQuery(usuario.TenantId)).ConfigureAwait(false);
-        if (tenantResult.Success)
-        {
-            tenantName = tenantResult.Value;
-        }
-    }
-
-    var payload = new { access_token = accessToken, refresh_token = refreshToken, tenant_name = tenantName, username = usuario?.NomeUsuario };
+    var value = result.Value!;
+    var payload = new { access_token = value.AccessToken, refresh_token = value.RefreshToken, tenant_name = value.TenantName, username = value.Username };
     return Results.Ok(Result<object>.Ok(payload));
 });
 
@@ -347,10 +324,10 @@ app.MapGet("/api/v1/consultores", async (
 // Endpoint para ativar consultor
 app.MapPatch("/api/v1/consultores/{id:guid}/ativar", async (
     Guid id,
-    Faceleads.Leads.Application.ActivateConsultor.ActivateConsultorHandler handler,
+    ActivateConsultorHandler handler,
     CancellationToken cancellationToken) =>
 {
-    var cmd = new Faceleads.Leads.Application.ActivateConsultor.ActivateConsultorCommand { Id = id };
+    var cmd = new ActivateConsultorCommand { Id = id };
     var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
 
     if (!result.Success)
@@ -369,10 +346,10 @@ app.MapPatch("/api/v1/consultores/{id:guid}/ativar", async (
 // Endpoint para desativar consultor
 app.MapPatch("/api/v1/consultores/{id:guid}/desativar", async (
     Guid id,
-    Faceleads.Leads.Application.DeactivateConsultor.DeactivateConsultorHandler handler,
+    DeactivateConsultorHandler handler,
     CancellationToken cancellationToken) =>
 {
-    var cmd = new Faceleads.Leads.Application.DeactivateConsultor.DeactivateConsultorCommand { Id = id };
+    var cmd = new DeactivateConsultorCommand { Id = id };
     var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
 
     if (!result.Success)

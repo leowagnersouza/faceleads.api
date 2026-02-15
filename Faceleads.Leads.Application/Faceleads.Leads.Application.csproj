@@ -4,6 +4,9 @@
     <ProjectReference Include="..\Faceleads.Leads.Domain\Faceleads.Leads.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
