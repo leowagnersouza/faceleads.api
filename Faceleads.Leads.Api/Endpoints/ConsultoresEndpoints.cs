@@ -9,6 +9,7 @@ using Faceleads.Leads.Api.Requests;
 using Faceleads.Leads.Application.Common;
 using Faceleads.Leads.Api.Extensions;
 using Faceleads.Leads.Domain;
+using Faceleads.Leads.Api.Authorization;
 
 namespace Faceleads.Leads.Api.Endpoints;
 
@@ -43,7 +44,7 @@ public static class ConsultoresEndpoints
             };
 
             return Results.Created($"/api/v1/consultores/{consultor.Id}", Result<object>.Ok(createdPayload));
-        }).RequireAuthorization("consultor.create");
+        }).RequireAuthorization(Permissions.Consultor.Create);
 
         // Versão API v1: listar consultores (usa mesmo handler e padrão Result)
         app.MapGet("/api/v1/consultores", async (
@@ -69,7 +70,7 @@ public static class ConsultoresEndpoints
             }).ToList();
 
             return Results.Ok(Result<IEnumerable<object>>.Ok(dto.Cast<object>()));
-        }).RequireAuthorization("consultor.list");
+        }).RequireAuthorization(Permissions.Consultor.Get);
 
         // Endpoint para ativar consultor
         app.MapPatch("/api/v1/consultores/{id:guid}/ativar", async (
@@ -86,7 +87,32 @@ public static class ConsultoresEndpoints
             }
 
             return Results.Ok(Result.Ok());
-        }).RequireAuthorization("consultor.update");
+        }).RequireAuthorization(Permissions.Consultor.Update);
+
+        // Endpoint para atualizar o consultor
+        app.MapPut("/api/v1/consultores/{id:guid}", async (
+            Guid id,
+            UpdateConsultorRequest request,
+            UpdateConsultorHandler handler,
+            CancellationToken cancellationToken) =>
+        {
+            var cmd = new UpdateConsultorCommand
+            {
+                Id = id,
+                NomeCompleto = request.NomeCompleto,
+                Email = request.Email,
+                Telefone = request.Telefone
+            };
+
+            var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
+
+            if (!result.Success)
+            {
+                return result.ToIResult();
+            }
+
+            return Results.Ok(Result.Ok());
+        }).RequireAuthorization(Permissions.Consultor.Update);
 
         // Endpoint para desativar consultor
         app.MapPatch("/api/v1/consultores/{id:guid}/desativar", async (
@@ -103,7 +129,7 @@ public static class ConsultoresEndpoints
             }
 
             return Results.Ok(Result.Ok());
-        }).RequireAuthorization("consultor.update");
+        }).RequireAuthorization(Permissions.Consultor.Update);
 
         // Endpoint para soft-delete (exclusão lógica)
         app.MapDelete("/api/v1/consultores/{id:guid}", async (
@@ -121,7 +147,7 @@ public static class ConsultoresEndpoints
             }
 
             return Results.Ok(Result.Ok());
-        }).RequireAuthorization("consultor.delete");
+        }).RequireAuthorization(Permissions.Consultor.Delete);
 
         // Endpoint para obter consultor por id
         app.MapGet("/api/v1/consultores/{id:guid}", async (
@@ -150,7 +176,7 @@ public static class ConsultoresEndpoints
             };
 
             return Results.Ok(Result<object>.Ok(payload));
-        }).RequireAuthorization();
+        }).RequireAuthorization(Permissions.Consultor.List);
 
         return app;
     }

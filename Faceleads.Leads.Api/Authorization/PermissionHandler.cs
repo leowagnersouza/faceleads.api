@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Faceleads.Leads.Application.Repositories;
 using Microsoft.Extensions.Caching.Memory;
 using System.Linq;
+using System;
+using System.Collections.Generic;
 
 namespace Faceleads.Leads.Api.Authorization;
 
@@ -51,36 +53,43 @@ public sealed class PermissionHandler : AuthorizationHandler<PermissionRequireme
             roles = usuario.Roles?.Select(r => r.Role!.Nome).ToArray() ?? Array.Empty<string>();
         }
 
-        // For each role, check cached permissions
-            foreach (var role in roles)
+        // For each role, check cached permissions (cache key includes tenant to avoid cross-tenant collisions)
+        foreach (var role in roles)
         {
-            var cacheKey = $"role_perms:{role}";
+            // Normalize role and permission names for consistent comparisons
+            var normalizedRole = role.ToUpperInvariant();
+            var normalizedRequirement = requirement.Permission.ToUpperInvariant();
+
+            // Try to read tenant id from claims so we resolve tenant-scoped roles correctly
+            Guid? tenantId = null;
+            var tenantClaim = context.User?.FindFirst("tenant_id")?.Value;
+            if (!string.IsNullOrEmpty(tenantClaim) && Guid.TryParse(tenantClaim, out var parsedTenant))
+            {
+                tenantId = parsedTenant;
+            }
+
+            var tenantKey = tenantId?.ToString() ?? "global";
+            var cacheKey = $"role_perms:{tenantKey}:{normalizedRole}";
+
             if (!_cache.TryGetValue<HashSet<string>>(cacheKey, out var perms))
             {
-                    // Resolve role id by normalized name then load permissions for that role
-                    var normalizedRole = role.ToUpperInvariant();
-                    // Try to read tenant id from claims so we resolve tenant-scoped roles correctly
-                    Guid? tenantId = null;
-                    var tenantClaim = context.User?.FindFirst("tenant_id")?.Value;
-                    if (!string.IsNullOrEmpty(tenantClaim) && Guid.TryParse(tenantClaim, out var parsedTenant))
-                    {
-                        tenantId = parsedTenant;
-                    }
+                // Resolve role id by normalized name then load permissions for that role
+                var roleEntity = await _roleRepo.GetByNormalizedNameAsync(tenantId, normalizedRole);
+                if (roleEntity is null)
+                {
+                    perms = new HashSet<string>();
+                }
+                else
+                {
+                    var permissions = await _rolePermRepo.GetPermissoesForRoleAsync(roleEntity.Id);
+                    // Ensure permission names are normalized the same way
+                    perms = permissions?.Select(p => p.NormalizedNome.ToUpperInvariant()).ToHashSet() ?? new HashSet<string>();
+                }
 
-                    var roleEntity = await _roleRepo.GetByNormalizedNameAsync(tenantId, normalizedRole);
-                    if (roleEntity is null)
-                    {
-                        perms = new HashSet<string>();
-                    }
-                    else
-                    {
-                        var permissions = await _rolePermRepo.GetPermissoesForRoleAsync(roleEntity.Id);
-                        perms = permissions?.Select(p => p.NormalizedNome).ToHashSet() ?? new HashSet<string>();
-                    }
                 _cache.Set(cacheKey, perms, TimeSpan.FromMinutes(5));
             }
 
-            if (perms.Contains(requirement.Permission.ToUpperInvariant()))
+            if (perms.Contains(normalizedRequirement))
             {
                 context.Succeed(requirement);
                 return;

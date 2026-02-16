@@ -121,10 +121,11 @@ builder.Services.AddScoped<AuditingSaveChangesInterceptor>();
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("consultor.create", p => p.Requirements.Add(new PermissionRequirement("consultor.create")));
-    options.AddPolicy("consultor.delete", p => p.Requirements.Add(new PermissionRequirement("consultor.delete")));
-    options.AddPolicy("consultor.update", p => p.Requirements.Add(new PermissionRequirement("consultor.update")));
-    options.AddPolicy("consultor.list", p => p.Requirements.Add(new PermissionRequirement("consultor.list")));
+    // Register all policies from Permissions central class
+    foreach (var perm in Permissions.GetAll())
+    {
+        options.AddPolicy(perm, p => p.Requirements.Add(new PermissionRequirement(perm)));
+    }
 });
 
 // Register permission handler and cache
