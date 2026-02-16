@@ -23,12 +23,18 @@ jobs:
           COMMIT_DATE=$(git log -1 --pretty=%ai)
           COMMIT_SHA=$(git log -1 --pretty=%h)
           BRANCH=$(git rev-parse --abbrev-ref HEAD)
-          
-          echo "message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
-          echo "author=$COMMIT_AUTHOR" >> $GITHUB_OUTPUT
-          echo "date=$COMMIT_DATE" >> $GITHUB_OUTPUT
-          echo "sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+          # Use multiline output syntax to safely write potentially multiline or special-character values
+          # GitHub Actions requires the key<<EOF / EOF format for multiline outputs
+          echo "message<<EOF" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$COMMIT_MESSAGE" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+          # Other single-line outputs
+          echo "author=${COMMIT_AUTHOR}" >> "$GITHUB_OUTPUT"
+          echo "date=${COMMIT_DATE}" >> "$GITHUB_OUTPUT"
+          echo "sha=${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
 
       - name: Send email notification
         uses: dawidd6/action-send-mail@v3
