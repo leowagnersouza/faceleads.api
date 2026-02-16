@@ -23,6 +23,8 @@ using Faceleads.Leads.Infrastructure.Interceptors;
 using Microsoft.AspNetCore.Authorization;
 using Faceleads.Leads.Api.Authorization;
 using Faceleads.Leads.Application.Auth;
+using Faceleads.Leads.Api.Endpoints;
+using Faceleads.Leads.Api.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -69,7 +71,7 @@ builder.Services.AddScoped<DeleteConsultorHandler>();
 builder.Services.AddScoped<ActivateConsultorHandler>();
 builder.Services.AddScoped<DeactivateConsultorHandler>();
 // Auth handlers
-builder.Services.AddScoped<Faceleads.Leads.Application.Auth.LoginHandler>();
+builder.Services.AddScoped<LoginHandler>();
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -159,6 +161,9 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+// Map consultores endpoints
+app.MapConsultoresEndpoints();
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -191,73 +196,6 @@ app.UseCors("AllowReactDev");
 
 app.UseAuthentication();
 app.UseAuthorization();
-
-// Endpoint para criação de consultor
-app.MapPost("/api/v1/consultores", async (
-    CreateConsultorCommand request,
-    CreateConsultorHandler handler,
-    CancellationToken cancellationToken) =>
-{
-    Result<Consultor> result = await handler.HandleAsync(request, cancellationToken).ConfigureAwait(false);
-
-    if (!result.Success)
-    {
-        return Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)));
-    }
-
-    var consultor = result.Value!;
-
-    var createdPayload = new
-    {
-        consultor.Id,
-        consultor.NomeCompleto,
-        consultor.Email,
-        consultor.Telefone,
-        consultor.Ativo,
-        consultor.CreatedOn,
-        consultor.CreatedBy
-    };
-
-    return Results.Created($"/api/v1/consultores/{consultor.Id}", Result<object>.Ok(createdPayload));
-}).RequireAuthorization("consultor.create");
-
-// Endpoint para atualizar o consultor
-app.MapPut("/api/v1/consultores/{id:guid}", async (
-    Guid id,
-    UpdateConsultorRequest request,
-    UpdateConsultorHandler handler,
-    CancellationToken cancellationToken) =>
-{
-    var cmd = new UpdateConsultorCommand
-    {
-        Id = id,
-        NomeCompleto = request.NomeCompleto,
-        Email = request.Email,
-        Telefone = request.Telefone
-    };
-
-    var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
-
-    if (!result.Success)
-    {
-        // Reuse the Error object returned by the handler when present
-        if (result.Error is not null)
-        {
-            var err = result.Error;
-            return err.StatusCode switch
-            {
-                400 => Results.BadRequest(Result.Fail(err)),
-                401 => Results.Json(Result.Fail(err), statusCode: 401),
-                404 => Results.NotFound(Result.Fail(err)),
-                _ => Results.BadRequest(Result.Fail(err))
-            };
-        }
-
-        return Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)));
-    }
-
-    return Results.Ok(Result.Ok());
-}).RequireAuthorization("consultor.update");
 
 // Fallback diagnostic endpoint: returns 404 with request path and registered endpoints list.
 // Useful to diagnose routing issues in environments where the app may be mounted under a path.
@@ -295,106 +233,13 @@ app.MapPost("/api/v1/login", async (
     var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
     if (!result.Success)
     {
-        return Results.Json(Result.Fail(new Error(result.ErrorCode ?? "AUTH_INVALID", result.ErrorMessage ?? "Credenciais inválidas.")), statusCode: 401);
+        return result.ToIResult();
     }
 
     var value = result.Value!;
     var payload = new { access_token = value.AccessToken, refresh_token = value.RefreshToken, tenant_name = value.TenantName, username = value.Username };
     return Results.Ok(Result<object>.Ok(payload));
 });
-
-// Versão API v1: listar consultores (usa mesmo handler e padrão Result)
-app.MapGet("/api/v1/consultores", async (
-    ListConsultoresHandler handler,
-    CancellationToken cancellationToken) =>
-{
-    var result = await handler.HandleAsync(new ListConsultoresQuery(), cancellationToken).ConfigureAwait(false);
-
-    if (!result.Success)
-    {
-        return Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)));
-    }
-
-    var dto = result.Value!.Select(c => new
-    {
-        c.Id,
-        c.NomeCompleto,
-        c.Email,
-        c.Telefone,
-        c.Ativo,
-        CreatedOn = c.CreatedOn,
-        CreatedBy = c.CreatedBy
-    }).ToList();
-
-    return Results.Ok(Result<IEnumerable<object>>.Ok(dto.Cast<object>()));
-}).RequireAuthorization("consultor.list");
-
-// Endpoint para ativar consultor
-app.MapPatch("/api/v1/consultores/{id:guid}/ativar", async (
-    Guid id,
-    ActivateConsultorHandler handler,
-    CancellationToken cancellationToken) =>
-{
-    var cmd = new ActivateConsultorCommand { Id = id };
-    var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
-
-    if (!result.Success)
-    {
-        return result.ErrorCode switch
-        {
-            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
-            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
-            _ => Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)))
-        };
-    }
-
-    return Results.Ok(Result.Ok());
-}).RequireAuthorization("consultor.update");
-
-// Endpoint para desativar consultor
-app.MapPatch("/api/v1/consultores/{id:guid}/desativar", async (
-    Guid id,
-    DeactivateConsultorHandler handler,
-    CancellationToken cancellationToken) =>
-{
-    var cmd = new DeactivateConsultorCommand { Id = id };
-    var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
-
-    if (!result.Success)
-    {
-        return result.ErrorCode switch
-        {
-            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
-            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
-            _ => Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)))
-        };
-    }
-
-    return Results.Ok(Result.Ok());
-}).RequireAuthorization("consultor.update");
-
-// Endpoint para soft-delete (exclusão lógica)
-app.MapDelete("/api/v1/consultores/{id:guid}", async (
-    Guid id,
-    DeleteConsultorHandler handler,
-    CancellationToken cancellationToken) =>
-{
-    var cmd = new DeleteConsultorCommand { Id = id };
-
-    var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
-
-    if (!result.Success)
-    {
-        return result.ErrorCode switch
-        {
-            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
-            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
-            _ => Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)))
-        };
-    }
-
-    return Results.Ok(Result.Ok());
-}).RequireAuthorization("consultor.delete");
 
 // Endpoint para renovar tokens usando refresh token
 app.MapPost("/api/v1/refresh", async (RefreshRequest request, ITokenService tokenService) =>
@@ -404,7 +249,7 @@ app.MapPost("/api/v1/refresh", async (RefreshRequest request, ITokenService toke
         var refreshResult = await tokenService.RefreshWithTokenAsync(request.RefreshToken);
         if (!refreshResult.Success)
         {
-            return Results.Json(Result.Fail(new Error(refreshResult.ErrorCode ?? "REFRESH_INVALID", refreshResult.ErrorMessage ?? string.Empty)), statusCode: 401);
+            return refreshResult.ToIResult();
         }
 
         var (accessToken, refreshToken) = refreshResult.Value!;
@@ -429,53 +274,5 @@ app.MapPost("/logout", async (RefreshRequest request, ITokenService tokenService
 
     return Results.NoContent();
 });
-
-// Endpoint para obter consultor por id
-app.MapGet("/api/v1/consultores/{id:guid}", async (
-    Guid id,
-    GetConsultorByIdHandler handler,
-    CancellationToken cancellationToken) =>
-{
-    Result<Consultor> result = await handler.HandleAsync(id, cancellationToken).ConfigureAwait(false);
-
-    if (!result.Success)
-    {
-        // Reuse the Error object produced by the handler when available
-        if (result.Error is not null)
-        {
-            var err = result.Error;
-            return err.StatusCode switch
-            {
-                400 => Results.BadRequest(Result.Fail(err)),
-                401 => Results.Json(Result.Fail(err), statusCode: 401),
-                404 => Results.NotFound(Result.Fail(err)),
-                _ => Results.BadRequest(Result.Fail(err))
-            };
-        }
-
-        // Fallback: no typed Error available, map by code
-        return result.ErrorCode switch
-        {
-            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
-            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
-            _ => Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)))
-        };
-    }
-
-    var consultor = result.Value!;
-
-    var payload = new
-    {
-        consultor.Id,
-        consultor.NomeCompleto,
-        consultor.Email,
-        consultor.Telefone,
-        consultor.Ativo,
-        CreatedOn = consultor.CreatedOn,
-        CreatedBy = consultor.CreatedBy
-    };
-
-    return Results.Ok(Result<object>.Ok(payload));
-}).RequireAuthorization();
 
 app.Run();
