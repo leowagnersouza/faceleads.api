@@ -16,13 +16,13 @@ public sealed class DeactivateConsultorHandler
     {
         if (command.Id == Guid.Empty)
         {
-            return Result.Fail("CONSULTOR_ID_INVALIDO", "O identificador do consultor é inválido.");
+            return Result.Fail(Errors.ConsultorIdInvalido);
         }
 
         var ok = await _repo.DeactivateAsync(command.Id, cancellationToken).ConfigureAwait(false);
         if (!ok)
         {
-            return Result.Fail("CONSULTOR_NAO_ENCONTRADO", "Consultor não encontrado.");
+            return Result.Fail(Errors.ConsultorNaoEncontrado);
         }
 
         return Result.Ok();

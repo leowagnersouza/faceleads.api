@@ -17,16 +17,12 @@ public sealed class CreateConsultorHandler
         // Validações básicas. Em um cenário real, poderíamos ter um validador dedicado.
         if (string.IsNullOrWhiteSpace(command.NomeCompleto))
         {
-            return Result<Consultor>.Fail(
-                "CONSULTOR_NOME_OBRIGATORIO",
-                "Nome completo do consultor é obrigatório.");
+            return Result<Consultor>.Fail(Errors.ConsultorNomeObrigatorio);
         }
 
         if (string.IsNullOrWhiteSpace(command.Email))
         {
-            return Result<Consultor>.Fail(
-                "CONSULTOR_EMAIL_OBRIGATORIO",
-                "Email do consultor é obrigatório.");
+            return Result<Consultor>.Fail(Errors.ConsultorEmailObrigatorio);
         }
 
         var consultor = new Consultor(

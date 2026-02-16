@@ -107,7 +107,7 @@ public sealed class TokenService : ITokenService
 
         if (existing is null || !existing.IsActive())
         {
-            return Result<(string, string)>.Fail("REFRESH_INVALID", "Refresh token is invalid or expired");
+            return Result<(string, string)>.Fail(Errors.RefreshInvalid);
         }
 
         return await RotateRefreshTokenAsync(existing, cancellationToken).ConfigureAwait(false);

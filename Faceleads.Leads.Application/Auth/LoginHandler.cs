@@ -36,7 +36,7 @@ public sealed class LoginHandler
 
         if (usuario is null)
         {
-            return Result<LoginResult>.Fail("AUTH_INVALID", "Credenciais inválidas.");
+            return Result<LoginResult>.Fail(Errors.AuthInvalid);
         }
 
         var verified = _passwordHasher.VerifyHashedPassword(usuario, usuario.SenhaHash, cmd.Password);
@@ -48,19 +48,19 @@ public sealed class LoginHandler
                 var fallback = new Faceleads.Leads.Application.Services.Pbkdf2PasswordHasher<Usuario>();
                 if (!fallback.VerifyHashedPassword(usuario, usuario.SenhaHash, cmd.Password))
                 {
-                    return Result<LoginResult>.Fail("AUTH_INVALID", "Credenciais inválidas.");
+                    return Result<LoginResult>.Fail(Errors.AuthInvalid);
                 }
             }
             catch
             {
-                return Result<LoginResult>.Fail("AUTH_INVALID", "Credenciais inválidas.");
+                return Result<LoginResult>.Fail(Errors.AuthInvalid);
             }
         }
 
         var issueResult = await _tokenService.IssueTokensAsync(usuario, cancellationToken).ConfigureAwait(false);
         if (!issueResult.Success)
         {
-            return Result<LoginResult>.Fail(issueResult.ErrorCode ?? "ERROR", issueResult.ErrorMessage ?? string.Empty);
+            return Result<LoginResult>.Fail(Errors.Generic);
         }
 
         var tuple = issueResult.Value!;

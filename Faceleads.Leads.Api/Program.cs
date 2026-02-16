@@ -202,7 +202,7 @@ app.MapPost("/api/v1/consultores", async (
 
     if (!result.Success)
     {
-        return Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty));
+        return Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)));
     }
 
     var consultor = result.Value!;
@@ -240,12 +240,20 @@ app.MapPut("/api/v1/consultores/{id:guid}", async (
 
     if (!result.Success)
     {
-        return result.ErrorCode switch
+        // Reuse the Error object returned by the handler when present
+        if (result.Error is not null)
         {
-            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
-            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
-            _ => Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty))
-        };
+            var err = result.Error;
+            return err.StatusCode switch
+            {
+                400 => Results.BadRequest(Result.Fail(err)),
+                401 => Results.Json(Result.Fail(err), statusCode: 401),
+                404 => Results.NotFound(Result.Fail(err)),
+                _ => Results.BadRequest(Result.Fail(err))
+            };
+        }
+
+        return Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)));
     }
 
     return Results.Ok(Result.Ok());
@@ -287,7 +295,7 @@ app.MapPost("/api/v1/login", async (
     var result = await handler.HandleAsync(cmd, cancellationToken).ConfigureAwait(false);
     if (!result.Success)
     {
-        return Results.Json(Result.Fail(result.ErrorCode ?? "AUTH_INVALID", result.ErrorMessage ?? "Credenciais inválidas."), statusCode: 401);
+        return Results.Json(Result.Fail(new Error(result.ErrorCode ?? "AUTH_INVALID", result.ErrorMessage ?? "Credenciais inválidas.")), statusCode: 401);
     }
 
     var value = result.Value!;
@@ -304,7 +312,7 @@ app.MapGet("/api/v1/consultores", async (
 
     if (!result.Success)
     {
-        return Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty));
+        return Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)));
     }
 
     var dto = result.Value!.Select(c => new
@@ -334,9 +342,9 @@ app.MapPatch("/api/v1/consultores/{id:guid}/ativar", async (
     {
         return result.ErrorCode switch
         {
-            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
-            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
-            _ => Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty))
+            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
+            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
+            _ => Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)))
         };
     }
 
@@ -356,9 +364,9 @@ app.MapPatch("/api/v1/consultores/{id:guid}/desativar", async (
     {
         return result.ErrorCode switch
         {
-            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
-            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
-            _ => Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty))
+            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
+            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
+            _ => Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)))
         };
     }
 
@@ -379,9 +387,9 @@ app.MapDelete("/api/v1/consultores/{id:guid}", async (
     {
         return result.ErrorCode switch
         {
-            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
-            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(result.ErrorCode!, result.ErrorMessage!)),
-            _ => Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty))
+            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
+            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
+            _ => Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)))
         };
     }
 
@@ -396,7 +404,7 @@ app.MapPost("/api/v1/refresh", async (RefreshRequest request, ITokenService toke
         var refreshResult = await tokenService.RefreshWithTokenAsync(request.RefreshToken);
         if (!refreshResult.Success)
         {
-            return Results.Json(Result.Fail(refreshResult.ErrorCode ?? "REFRESH_INVALID", refreshResult.ErrorMessage ?? string.Empty), statusCode: 401);
+            return Results.Json(Result.Fail(new Error(refreshResult.ErrorCode ?? "REFRESH_INVALID", refreshResult.ErrorMessage ?? string.Empty)), statusCode: 401);
         }
 
         var (accessToken, refreshToken) = refreshResult.Value!;
@@ -432,12 +440,25 @@ app.MapGet("/api/v1/consultores/{id:guid}", async (
 
     if (!result.Success)
     {
-        // Diferenciar Id inválido (400) de não encontrado (404) pelo código de erro
+        // Reuse the Error object produced by the handler when available
+        if (result.Error is not null)
+        {
+            var err = result.Error;
+            return err.StatusCode switch
+            {
+                400 => Results.BadRequest(Result.Fail(err)),
+                401 => Results.Json(Result.Fail(err), statusCode: 401),
+                404 => Results.NotFound(Result.Fail(err)),
+                _ => Results.BadRequest(Result.Fail(err))
+            };
+        }
+
+        // Fallback: no typed Error available, map by code
         return result.ErrorCode switch
         {
-            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(result.ErrorCode, result.ErrorMessage ?? string.Empty)),
-            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(result.ErrorCode, result.ErrorMessage ?? string.Empty)),
-            _ => Results.BadRequest(Result.Fail(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty))
+            "CONSULTOR_ID_INVALIDO" => Results.BadRequest(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
+            "CONSULTOR_NAO_ENCONTRADO" => Results.NotFound(Result.Fail(new Error(result.ErrorCode!, result.ErrorMessage!))),
+            _ => Results.BadRequest(Result.Fail(new Error(result.ErrorCode ?? "ERROR", result.ErrorMessage ?? string.Empty)))
         };
     }
 

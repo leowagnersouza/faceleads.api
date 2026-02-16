@@ -16,18 +16,14 @@ public sealed class GetConsultorByIdHandler
     {
         if (id == Guid.Empty)
         {
-            return Result<Consultor>.Fail(
-                "CONSULTOR_ID_INVALIDO",
-                "O identificador do consultor é inválido.");
+            return Result<Consultor>.Fail(Errors.ConsultorIdInvalido);
         }
 
         var consultor = await _repository.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
 
         if (consultor is null)
         {
-            return Result<Consultor>.Fail(
-                "CONSULTOR_NAO_ENCONTRADO",
-                "Consultor não encontrado.");
+            return Result<Consultor>.Fail(Errors.ConsultorNaoEncontrado);
         }
 
         return Result<Consultor>.Ok(consultor);

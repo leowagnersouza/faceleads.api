@@ -16,24 +16,24 @@ public sealed class UpdateConsultorHandler
     {
         if (command.Id == Guid.Empty)
         {
-            return Result.Fail("CONSULTOR_ID_INVALIDO", "O identificador do consultor é inválido.");
+            return Result.Fail(Errors.ConsultorIdInvalido);
         }
 
         if (string.IsNullOrWhiteSpace(command.NomeCompleto))
         {
-            return Result.Fail("CONSULTOR_NOME_OBRIGATORIO", "Nome completo do consultor é obrigatório.");
+            return Result.Fail(Errors.ConsultorNomeObrigatorio);
         }
 
         if (string.IsNullOrWhiteSpace(command.Email))
         {
-            return Result.Fail("CONSULTOR_EMAIL_OBRIGATORIO", "Email do consultor é obrigatório.");
+            return Result.Fail(Errors.ConsultorEmailObrigatorio);
         }
 
         var updated = await _repository.UpdateAsync(command.Id, command.NomeCompleto, command.Email, command.Telefone, cancellationToken).ConfigureAwait(false);
 
         if (!updated)
         {
-            return Result.Fail("CONSULTOR_NAO_ENCONTRADO", "Consultor não encontrado.");
+            return Result.Fail(Errors.ConsultorNaoEncontrado);
         }
 
         return Result.Ok();
