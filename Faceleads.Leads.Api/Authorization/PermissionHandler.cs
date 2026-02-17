@@ -54,19 +54,19 @@ public sealed class PermissionHandler : AuthorizationHandler<PermissionRequireme
         }
 
         // For each role, check cached permissions (cache key includes tenant to avoid cross-tenant collisions)
-        foreach (var role in roles)
+            foreach (var role in roles)
         {
             // Normalize role and permission names for consistent comparisons
-            var normalizedRole = role.ToUpperInvariant();
+                    var normalizedRole = role.ToUpperInvariant();
             var normalizedRequirement = requirement.Permission.ToUpperInvariant();
 
-            // Try to read tenant id from claims so we resolve tenant-scoped roles correctly
-            Guid? tenantId = null;
-            var tenantClaim = context.User?.FindFirst("tenant_id")?.Value;
-            if (!string.IsNullOrEmpty(tenantClaim) && Guid.TryParse(tenantClaim, out var parsedTenant))
-            {
-                tenantId = parsedTenant;
-            }
+                    // Try to read tenant id from claims so we resolve tenant-scoped roles correctly
+                    Guid? tenantId = null;
+                    var tenantClaim = context.User?.FindFirst("tenant_id")?.Value;
+                    if (!string.IsNullOrEmpty(tenantClaim) && Guid.TryParse(tenantClaim, out var parsedTenant))
+                    {
+                        tenantId = parsedTenant;
+                    }
 
             var tenantKey = tenantId?.ToString() ?? "global";
             var cacheKey = $"role_perms:{tenantKey}:{normalizedRole}";
@@ -74,17 +74,17 @@ public sealed class PermissionHandler : AuthorizationHandler<PermissionRequireme
             if (!_cache.TryGetValue<HashSet<string>>(cacheKey, out var perms))
             {
                 // Resolve role id by normalized name then load permissions for that role
-                var roleEntity = await _roleRepo.GetByNormalizedNameAsync(tenantId, normalizedRole);
-                if (roleEntity is null)
-                {
-                    perms = new HashSet<string>();
-                }
-                else
-                {
-                    var permissions = await _rolePermRepo.GetPermissoesForRoleAsync(roleEntity.Id);
+                    var roleEntity = await _roleRepo.GetByNormalizedNameAsync(tenantId, normalizedRole);
+                    if (roleEntity is null)
+                    {
+                        perms = new HashSet<string>();
+                    }
+                    else
+                    {
+                        var permissions = await _rolePermRepo.GetPermissoesForRoleAsync(roleEntity.Id);
                     // Ensure permission names are normalized the same way
                     perms = permissions?.Select(p => p.NormalizedNome.ToUpperInvariant()).ToHashSet() ?? new HashSet<string>();
-                }
+                    }
 
                 _cache.Set(cacheKey, perms, TimeSpan.FromMinutes(5));
             }

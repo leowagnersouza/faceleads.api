@@ -95,4 +95,14 @@ public sealed class Usuario
     {
         BloqueioFim = until;
     }
+
+    public void Ativar()
+    {
+        Ativo = true;
+    }
+
+    public void Desativar()
+    {
+        Ativo = false;
+    }
 }

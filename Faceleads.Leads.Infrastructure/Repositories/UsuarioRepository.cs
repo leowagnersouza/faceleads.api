@@ -57,4 +57,9 @@ public sealed class UsuarioRepository : IUsuarioRepository
         _db.Usuarios.Update(usuario);
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    public async Task<IEnumerable<Usuario>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        return await _db.Usuarios.AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
 }

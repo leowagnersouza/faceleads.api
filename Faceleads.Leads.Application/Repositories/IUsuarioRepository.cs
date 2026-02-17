@@ -25,4 +25,6 @@ public interface IUsuarioRepository
     Task<Usuario?> GetWithRolesByNormalizedUsernameAsync(Guid tenantId, string normalizedUsername, CancellationToken cancellationToken = default);
 
     Task UpdateAsync(Usuario usuario, CancellationToken cancellationToken = default);
+
+    Task<IEnumerable<Usuario>> ListAsync(CancellationToken cancellationToken = default);
 }

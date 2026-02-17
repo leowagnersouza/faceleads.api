@@ -1,6 +1,4 @@
 using System.Reflection;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Faceleads.Leads.Api.Authorization;
 
@@ -18,6 +16,14 @@ public static class Permissions
         public const string Get = "consultor.get";
         public const string Update = "consultor.update";
         public const string Delete = "consultor.delete";
+    }
+
+    public static class Usuario
+    {
+        public const string List = "usuario.list";
+        public const string Create = "usuario.create";
+        public const string Get = "usuario.get";
+        public const string Update = "usuario.update";
     }
 
     // Example: add other resources here

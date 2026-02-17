@@ -14,17 +14,12 @@ using Microsoft.AspNetCore.Identity;
 using Faceleads.Leads.Api.Requests;
 using Faceleads.Leads.Api.Services;
 using Microsoft.OpenApi.Models;
-using Faceleads.Leads.Application.GetTenantName;
-using Faceleads.Leads.Application.UpdateConsultor;
-using Faceleads.Leads.Application.DeleteConsultor;
-using Faceleads.Leads.Application.DeactivateConsultor;
-using Faceleads.Leads.Application.ActivateConsultor;
 using Faceleads.Leads.Infrastructure.Interceptors;
-using Microsoft.AspNetCore.Authorization;
 using Faceleads.Leads.Api.Authorization;
 using Faceleads.Leads.Application.Auth;
 using Faceleads.Leads.Api.Endpoints;
 using Faceleads.Leads.Api.Extensions;
+using Faceleads.Leads.Api.Adapters;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,31 +42,17 @@ builder.Services.AddDbContext<LeadsDbContext>((serviceProvider, options) =>
 });
 
 // Repositórios
-builder.Services.AddScoped<ILeadRepository, LeadRepository>();
-builder.Services.AddScoped<IConsultorRepository, ConsultorRepository>();
-builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
-builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
-builder.Services.AddScoped<IRoleRepository, RoleRepository>();
-builder.Services.AddScoped<IPermissaoRepository, PermissaoRepository>();
-builder.Services.AddScoped<IRolePermissaoRepository, RolePermissaoRepository>();
+// Register repositories automatically from the Infrastructure assembly
+builder.Services.AddApplicationRepositories(typeof(LeadsDbContext).Assembly);
+// Register token service explicitly (API adapter). 
 builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddScoped<ITenantRepository, TenantRepository>();
 // Identity helpers - use ASP.NET Identity hasher adapter for compatibility with existing hashes
-builder.Services.AddScoped<Faceleads.Leads.Application.Services.IPasswordHasher<Usuario>, Faceleads.Leads.Api.Adapters.PasswordHasherAdapter<Usuario>>();
+builder.Services.AddScoped<Faceleads.Leads.Application.Services.IPasswordHasher<Usuario>, PasswordHasherAdapter<Usuario>>();
 // Also register open-generic adapter for other types if needed
-builder.Services.AddScoped(typeof(Faceleads.Leads.Application.Services.IPasswordHasher<>), typeof(Faceleads.Leads.Api.Adapters.PasswordHasherAdapter<>));
+builder.Services.AddScoped(typeof(IPasswordHasher<>), typeof(PasswordHasherAdapter<>));
 
-// Casos de uso / handlers
-builder.Services.AddScoped<CreateConsultorHandler>();
-builder.Services.AddScoped<GetConsultorByIdHandler>();
-builder.Services.AddScoped<ListConsultoresHandler>();
-builder.Services.AddScoped<GetTenantNameHandler>();
-builder.Services.AddScoped<UpdateConsultorHandler>();
-builder.Services.AddScoped<DeleteConsultorHandler>();
-builder.Services.AddScoped<ActivateConsultorHandler>();
-builder.Services.AddScoped<DeactivateConsultorHandler>();
-// Auth handlers
-builder.Services.AddScoped<LoginHandler>();
+// Casos de uso / handlers - register all handlers automatically
+builder.Services.AddApplicationHandlers(typeof(Faceleads.Leads.Application.AssemblyMarker).Assembly);
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -115,7 +96,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 // Register auditing support
-builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<AuditingSaveChangesInterceptor>();
 
@@ -130,7 +110,6 @@ builder.Services.AddAuthorization(options =>
 
 // Register permission handler and cache
 builder.Services.AddMemoryCache();
-builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 // Register adapter to satisfy application ITokenService without making Application depend on Api project
 builder.Services.AddScoped<Faceleads.Leads.Application.Services.ITokenService, Faceleads.Leads.Api.Adapters.TokenServiceAdapter>();
 // CurrentTenantService already registered above (implements application interface)
@@ -164,6 +143,8 @@ var app = builder.Build();
 
 // Map consultores endpoints
 app.MapConsultoresEndpoints();
+// Map usuarios endpoints
+app.MapUsuariosEndpoints();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
